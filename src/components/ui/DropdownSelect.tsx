@@ -76,7 +76,7 @@ export function DropdownSelect({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-10 w-full items-center justify-between rounded-lg border border-zinc-300 bg-zinc-50 px-3 text-left text-base text-zinc-900 shadow-sm transition-colors focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-100 md:text-sm"
+        className="flex h-10 w-full items-center justify-between rounded-lg border border-zinc-300 bg-zinc-50 px-3 text-left text-base text-zinc-900  transition-colors focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-100 md:text-sm"
       >
         <span className={cn('truncate', selectedOption ? 'text-zinc-900' : 'text-zinc-400')}>
           {selectedOption?.label ?? placeholder}
