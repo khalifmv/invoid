@@ -1,17 +1,34 @@
-import { useMemo, useState } from 'react'
+import { PenLine, Save, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Button } from '../components/ui/Button'
 import { Card, CardTitle } from '../components/ui/Card'
+import { Dialog } from '../components/ui/Dialog'
 import { DropdownSelect, type DropdownOption } from '../components/ui/DropdownSelect'
 import { Input } from '../components/ui/Input'
 import { NumberInput } from '../components/ui/NumberInput'
+import { useIsDesktop } from '../hooks/useIsDesktop'
 import { createCurrencyFormatter } from '../lib/currency'
+import type { Product } from '../types'
 import { useCatalogStore } from '../store/catalogStore'
 import { useSettingsStore } from '../store/settingsStore'
 
 type CatalogTab = 'products' | 'categories'
 
+interface ProductDraft {
+  name: string
+  defaultPrice: number
+  categoryId: string
+}
+
+const toDraft = (product: Product): ProductDraft => ({
+  name: product.name,
+  defaultPrice: product.defaultPrice,
+  categoryId: product.categoryId ?? '',
+})
+
 export function CatalogPage() {
+  const isDesktop = useIsDesktop()
   const currencyCode = useSettingsStore((state) => state.currency)
   const {
     categories,
@@ -20,6 +37,7 @@ export function CatalogPage() {
     errorMessage,
     createCategory,
     createProduct,
+    updateProduct,
     deleteProduct,
   } = useCatalogStore()
 
@@ -28,6 +46,15 @@ export function CatalogPage() {
   const [newProductName, setNewProductName] = useState('')
   const [newProductPrice, setNewProductPrice] = useState(0)
   const [newProductCategoryId, setNewProductCategoryId] = useState('')
+  const [productDrafts, setProductDrafts] = useState<Record<string, ProductDraft>>({})
+  const [editingDesktopProductId, setEditingDesktopProductId] = useState<string | null>(null)
+  const [mobileEditingProductId, setMobileEditingProductId] = useState<string | null>(null)
+  const [mobileDraft, setMobileDraft] = useState<ProductDraft>({
+    name: '',
+    defaultPrice: 0,
+    categoryId: '',
+  })
+  const [savingProductId, setSavingProductId] = useState<string | null>(null)
 
   const categoryNamesById = useMemo(
     () => new Map(categories.map((category) => [category.id, category.name])),
@@ -44,10 +71,16 @@ export function CatalogPage() {
     [categories],
   )
 
-  const currency = useMemo(
-    () => createCurrencyFormatter(currencyCode),
-    [currencyCode],
+  const currency = useMemo(() => createCurrencyFormatter(currencyCode), [currencyCode])
+  const mobileEditingProduct = useMemo(
+    () => products.find((product) => product.id === mobileEditingProductId) ?? null,
+    [products, mobileEditingProductId],
   )
+
+  useEffect(() => {
+    const nextDrafts = Object.fromEntries(products.map((product) => [product.id, toDraft(product)]))
+    setProductDrafts(nextDrafts)
+  }, [products])
 
   const handleCreateCategory = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -63,126 +96,368 @@ export function CatalogPage() {
     setNewProductCategoryId('')
   }
 
-  return (
-    <section className="mx-auto w-full">
-      <Card>
-        <CardTitle>Catalog</CardTitle>
+  const handleDraftChange = (productId: string, patch: Partial<ProductDraft>) => {
+    setProductDrafts((previous) => ({
+      ...previous,
+      [productId]: {
+        ...previous[productId],
+        ...patch,
+      },
+    }))
+  }
 
-        <div className="mb-4 flex gap-2">
-          <Button
-            variant={activeTab === 'products' ? 'primary' : 'outline'}
-            onClick={() => setActiveTab('products')}
-          >
-            Products
-          </Button>
-          <Button
-            variant={activeTab === 'categories' ? 'primary' : 'outline'}
-            onClick={() => setActiveTab('categories')}
-          >
-            Categories
-          </Button>
+  const openDesktopEditor = (productId: string) => {
+    const product = products.find((entry) => entry.id === productId)
+    if (!product) {
+      return
+    }
+
+    setEditingDesktopProductId(productId)
+    setProductDrafts((previous) => ({
+      ...previous,
+      [productId]: toDraft(product),
+    }))
+  }
+
+  const cancelDesktopEditor = () => {
+    if (!editingDesktopProductId) {
+      return
+    }
+
+    const product = products.find((entry) => entry.id === editingDesktopProductId)
+    if (product) {
+      setProductDrafts((previous) => ({
+        ...previous,
+        [editingDesktopProductId]: toDraft(product),
+      }))
+    }
+    setEditingDesktopProductId(null)
+  }
+
+  const handleSaveProduct = async (productId: string) => {
+    const draft = productDrafts[productId]
+    if (!draft || draft.name.trim().length === 0) {
+      return
+    }
+
+    setSavingProductId(productId)
+
+    try {
+      await updateProduct(productId, draft.name, draft.defaultPrice, draft.categoryId || null)
+      setEditingDesktopProductId(null)
+    } finally {
+      setSavingProductId(null)
+    }
+  }
+
+  const openMobileEditor = (productId: string) => {
+    const product = products.find((entry) => entry.id === productId)
+    if (!product) {
+      return
+    }
+
+    setMobileEditingProductId(productId)
+    setMobileDraft(toDraft(product))
+  }
+
+  const closeMobileEditor = () => {
+    setMobileEditingProductId(null)
+  }
+
+  const saveMobileEditor = async () => {
+    if (!mobileEditingProductId || mobileDraft.name.trim().length === 0) {
+      return
+    }
+
+    setSavingProductId(mobileEditingProductId)
+
+    try {
+      await updateProduct(
+        mobileEditingProductId,
+        mobileDraft.name,
+        mobileDraft.defaultPrice,
+        mobileDraft.categoryId || null,
+      )
+      setMobileEditingProductId(null)
+    } finally {
+      setSavingProductId(null)
+    }
+  }
+
+  useEffect(() => {
+    if (!isDesktop && editingDesktopProductId) {
+      setEditingDesktopProductId(null)
+    }
+  }, [editingDesktopProductId, isDesktop])
+
+  return (
+    <>
+      <section className="mx-auto w-full">
+        <Card>
+          <CardTitle>Catalog</CardTitle>
+
+          <div className="mb-4 flex gap-2">
+            <Button
+              variant={activeTab === 'products' ? 'primary' : 'outline'}
+              onClick={() => setActiveTab('products')}
+            >
+              Products
+            </Button>
+            <Button
+              variant={activeTab === 'categories' ? 'primary' : 'outline'}
+              onClick={() => setActiveTab('categories')}
+            >
+              Categories
+            </Button>
+          </div>
+
+          {activeTab === 'products' && (
+            <div className="grid gap-4">
+              <form onSubmit={handleCreateProduct}>
+                <label htmlFor="prod-name" className="mb-1 block text-xs font-semibold text-zinc-600">
+                  New product
+                </label>
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-[1.8fr_1fr_1fr_auto]">
+                  <Input
+                    id="prod-name"
+                    value={newProductName}
+                    onChange={(event) => setNewProductName(event.target.value)}
+                    placeholder="Product name"
+                  />
+                  <NumberInput
+                    min={0}
+                    value={newProductPrice}
+                    onValueChange={setNewProductPrice}
+                    placeholder="Price"
+                  />
+                  <DropdownSelect
+                    value={newProductCategoryId}
+                    onChange={setNewProductCategoryId}
+                    options={categoryOptions}
+                  />
+                  <Button type="submit">Save</Button>
+                </div>
+              </form>
+
+              {isLoading && <p className="text-sm text-zinc-400">Loading...</p>}
+              {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+
+              {products.length === 0 ? (
+                <p className="py-2 text-sm text-zinc-400">No products yet.</p>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-stone-200">
+                  <div className="max-h-[460px] overflow-auto">
+                    <table className="min-w-full border-collapse">
+                      <thead className="bg-stone-100">
+                        <tr className="text-xs font-semibold tracking-[0.08em] text-zinc-500 uppercase">
+                          <th className="p-2 text-left">Product</th>
+                          <th className="hidden p-2 text-left md:table-cell">Category</th>
+                          <th className="p-2 text-right">Price</th>
+                          <th className="w-40 p-2 text-right">Actions</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {products.map((product) => {
+                          const draft = productDrafts[product.id] ?? toDraft(product)
+                          const isEditingDesktop = editingDesktopProductId === product.id
+                          const categoryLabel = product.categoryId
+                            ? (categoryNamesById.get(product.categoryId) ?? 'Uncategorized')
+                            : 'Uncategorized'
+
+                          return (
+                            <tr key={product.id} className="border-t border-stone-200 bg-white">
+                              <td className="p-2 align-top">
+                                <div className="md:hidden">
+                                  <p className="truncate text-sm font-semibold text-zinc-800">{product.name}</p>
+                                  <p className="mt-1 text-xs text-zinc-500">{categoryLabel}</p>
+                                </div>
+                                <div className="hidden md:block">
+                                  {isEditingDesktop ? (
+                                    <Input
+                                      value={draft.name}
+                                      onChange={(event) =>
+                                        handleDraftChange(product.id, { name: event.target.value })
+                                      }
+                                    />
+                                  ) : (
+                                    <p className="text-sm font-semibold text-zinc-800">{product.name}</p>
+                                  )}
+                                </div>
+                              </td>
+
+                              <td className="hidden p-2 align-middle md:table-cell">
+                                {isEditingDesktop ? (
+                                  <DropdownSelect
+                                    value={draft.categoryId}
+                                    onChange={(categoryId) => handleDraftChange(product.id, { categoryId })}
+                                    options={categoryOptions}
+                                  />
+                                ) : (
+                                  <p className="text-sm text-zinc-600">{categoryLabel}</p>
+                                )}
+                              </td>
+
+                              <td className="p-2 text-right align-middle text-sm font-semibold text-zinc-800">
+                                {isEditingDesktop ? (
+                                  <div className="hidden md:block">
+                                    <NumberInput
+                                      min={0}
+                                      value={draft.defaultPrice}
+                                      onValueChange={(defaultPrice) =>
+                                        handleDraftChange(product.id, { defaultPrice })
+                                      }
+                                    />
+                                  </div>
+                                ) : null}
+                                <p className={isEditingDesktop ? 'md:hidden' : ''}>
+                                  {currency.format(
+                                    isEditingDesktop ? draft.defaultPrice : product.defaultPrice,
+                                  )}
+                                </p>
+                              </td>
+
+                              <td className="p-2">
+                                <div className="flex justify-end gap-1">
+                                  {isEditingDesktop && isDesktop ? (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => void handleSaveProduct(product.id)}
+                                        disabled={savingProductId === product.id || draft.name.trim().length === 0}
+                                        aria-label={`Save ${product.name}`}
+                                      >
+                                        <Save className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={cancelDesktopEditor}
+                                        aria-label={`Cancel editing ${product.name}`}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          isDesktop ? openDesktopEditor(product.id) : openMobileEditor(product.id)
+                                        }
+                                        aria-label={`Edit ${product.name}`}
+                                      >
+                                        <PenLine className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="danger"
+                                        size="sm"
+                                        onClick={() => void deleteProduct(product.id)}
+                                        aria-label={`Delete ${product.name}`}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'categories' && (
+            <div className="grid gap-4">
+              <form onSubmit={handleCreateCategory}>
+                <label htmlFor="cat-name" className="mb-1 block text-xs font-semibold text-zinc-600">
+                  New category
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <Input
+                    id="cat-name"
+                    value={newCategoryName}
+                    onChange={(event) => setNewCategoryName(event.target.value)}
+                    placeholder="e.g. Services"
+                    className="min-w-60 flex-1"
+                  />
+                  <Button type="submit">Save</Button>
+                </div>
+              </form>
+
+              {isLoading && <p className="text-sm text-zinc-400">Loading...</p>}
+              {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+
+              {categories.length === 0 ? (
+                <p className="py-2 text-sm text-zinc-400">No categories yet.</p>
+              ) : (
+                <div className="grid gap-2 border-t border-stone-200 pt-3">
+                  {categories.map((category) => (
+                    <div
+                      className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-zinc-800"
+                      key={category.id}
+                    >
+                      {category.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      </section>
+
+      <Dialog
+        open={Boolean(mobileEditingProduct)}
+        onClose={closeMobileEditor}
+        title="Edit Product"
+        footer={
+          <>
+            <Button variant="outline" onClick={closeMobileEditor}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void saveMobileEditor()}
+              disabled={mobileDraft.name.trim().length === 0 || savingProductId === mobileEditingProductId}
+            >
+              Save
+            </Button>
+          </>
+        }
+      >
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">Product name</label>
+          <Input
+            value={mobileDraft.name}
+            onChange={(event) => setMobileDraft((prev) => ({ ...prev, name: event.target.value }))}
+          />
         </div>
 
-        {activeTab === 'products' && (
-          <div className="grid gap-4">
-            <form onSubmit={handleCreateProduct}>
-              <label htmlFor="prod-name" className="mb-1 block text-xs font-semibold text-zinc-600">
-                New product
-              </label>
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-[1.8fr_1fr_1fr_auto]">
-                <Input
-                  id="prod-name"
-                  value={newProductName}
-                  onChange={(event) => setNewProductName(event.target.value)}
-                  placeholder="Product name"
-                />
-                <NumberInput
-                  min={0}
-                  value={newProductPrice}
-                  onValueChange={setNewProductPrice}
-                  placeholder="Price"
-                />
-                <DropdownSelect
-                  value={newProductCategoryId}
-                  onChange={setNewProductCategoryId}
-                  options={categoryOptions}
-                />
-                <Button type="submit">Save</Button>
-              </div>
-            </form>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">Category</label>
+          <DropdownSelect
+            value={mobileDraft.categoryId}
+            onChange={(categoryId) => setMobileDraft((prev) => ({ ...prev, categoryId }))}
+            options={categoryOptions}
+          />
+        </div>
 
-            {isLoading && <p className="text-sm text-zinc-400">Loading...</p>}
-            {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
-
-            {products.length === 0 ? (
-              <p className="py-2 text-sm text-zinc-400">No products yet.</p>
-            ) : (
-              <div className="grid gap-2 border-t border-stone-200 pt-3">
-                {products.map((product) => (
-                  <div
-                    className="flex items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2"
-                    key={product.id}
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm text-zinc-800">{product.name}</span>
-                    <span className="hidden text-xs text-zinc-500 sm:block">
-                      {product.categoryId
-                        ? categoryNamesById.get(product.categoryId) ?? 'Uncategorized'
-                        : 'Uncategorized'}
-                    </span>
-                    <span className="text-sm text-zinc-700">{currency.format(product.defaultPrice)}</span>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => void deleteProduct(product.id)}
-                      aria-label={`Delete ${product.name}`}
-                    >
-                      x
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'categories' && (
-          <div className="grid gap-4">
-            <form onSubmit={handleCreateCategory}>
-              <label htmlFor="cat-name" className="mb-1 block text-xs font-semibold text-zinc-600">
-                New category
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <Input
-                  id="cat-name"
-                  value={newCategoryName}
-                  onChange={(event) => setNewCategoryName(event.target.value)}
-                  placeholder="e.g. Services"
-                  className="min-w-60 flex-1"
-                />
-                <Button type="submit">Save</Button>
-              </div>
-            </form>
-
-            {isLoading && <p className="text-sm text-zinc-400">Loading...</p>}
-            {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
-
-            {categories.length === 0 ? (
-              <p className="py-2 text-sm text-zinc-400">No categories yet.</p>
-            ) : (
-              <div className="grid gap-2 border-t border-stone-200 pt-3">
-                {categories.map((category) => (
-                  <div
-                    className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-zinc-800"
-                    key={category.id}
-                  >
-                    {category.name}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
-    </section>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">Price</label>
+          <NumberInput
+            min={0}
+            value={mobileDraft.defaultPrice}
+            onValueChange={(defaultPrice) => setMobileDraft((prev) => ({ ...prev, defaultPrice }))}
+          />
+        </div>
+      </Dialog>
+    </>
   )
 }

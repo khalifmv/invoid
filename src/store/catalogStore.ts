@@ -15,6 +15,12 @@ interface CatalogActions {
   hydrate: () => Promise<void>
   createCategory: (name: string) => Promise<void>
   createProduct: (name: string, defaultPrice: number, categoryId: string | null) => Promise<void>
+  updateProduct: (
+    productId: string,
+    name: string,
+    defaultPrice: number,
+    categoryId: string | null,
+  ) => Promise<void>
   deleteProduct: (productId: string) => Promise<void>
 }
 
@@ -89,6 +95,31 @@ export const useCatalogStore = create<CatalogStore>((set, get) => ({
     }
 
     await db.products.add(product)
+    await get().hydrate()
+  },
+
+  updateProduct: async (productId, name, defaultPrice, categoryId) => {
+    const normalizedName = name.trim()
+    if (normalizedName.length === 0) {
+      return
+    }
+
+    const existing = await db.products.get(productId)
+    if (!existing) {
+      return
+    }
+
+    const normalizedPrice = Number.isFinite(defaultPrice) ? Math.max(defaultPrice, 0) : 0
+
+    const updatedProduct: Product = {
+      ...existing,
+      name: normalizedName,
+      defaultPrice: normalizedPrice,
+      categoryId,
+      updatedAt: nowIso(),
+    }
+
+    await db.products.put(updatedProduct)
     await get().hydrate()
   },
 
