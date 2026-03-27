@@ -5,16 +5,15 @@
 <h1 align="center"></h1>
 
 <p align="center">
-  An offline-first invoice generator for everyone and small businesses.
+  An open-source invoice generator for everyone and small businesses.
   <br />
-  No account. No server. No internet required.
 </p>
 
 ---
 
 ## Overview
 
-Invoid is a browser-based invoicing tool designed to let you create a professional invoice in under 20 seconds. All data is stored locally in your browser using IndexedDB — nothing is sent to a server. The application is built as a single-page application and is designed to eventually be installable as a Progressive Web App (PWA).
+Invoid is a browser-based invoicing tool designed to let you create a professional invoice in seconds. All data is stored locally in your browser using IndexedDB, nothing is sent to a server. The application is built as a single-page application and is designed to eventually be installable as a Progressive Web App (PWA).
 
 The core workflow is straightforward: maintain a catalog of your products and categories, build an invoice by selecting items from that catalog (or entering them manually), apply a discount and tax, then export. Every saved invoice is retained in local history for reference.
 

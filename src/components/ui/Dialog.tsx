@@ -39,7 +39,7 @@ export function Dialog({ open, onClose, title, children, footer }: DialogProps) 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end bg-black/40 p-3 md:items-center md:justify-center"
+      className="dialog-backdrop-enter fixed inset-0 z-50 flex items-end bg-black/40 p-3 md:items-center md:justify-center"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose()
@@ -48,7 +48,7 @@ export function Dialog({ open, onClose, title, children, footer }: DialogProps) 
       role="presentation"
     >
       <div
-        className="w-full rounded-2xl border border-stone-200 bg-white p-4 shadow-xl md:max-w-md"
+        className="dialog-panel-enter w-full rounded-2xl border border-stone-200 bg-white p-4 shadow-xl md:max-w-md"
         role="dialog"
         aria-modal="true"
         aria-label={title}
