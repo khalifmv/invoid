@@ -2,10 +2,10 @@
   <img src="src/assets/invoid.svg" alt="Invoid" height="72" />
 </p>
 
-<h1 align="center">Invoid</h1>
+<h1 align="center"></h1>
 
 <p align="center">
-  An offline-first invoice generator for freelancers and small businesses.
+  An offline-first invoice generator for everyone and small businesses.
   <br />
   No account. No server. No internet required.
 </p>
