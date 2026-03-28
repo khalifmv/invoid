@@ -4,9 +4,17 @@ import { Link, useParams } from 'react-router'
 import { Button } from '../components/ui/Button'
 import { Card, CardTitle } from '../components/ui/Card'
 import { createCurrencyFormatter } from '../lib/currency'
-import type { Invoice } from '../types'
+import { computeCashChange } from '../lib/invoice-calculations'
+import type { Invoice, PaymentMethod } from '../types'
 import { useInvoiceStore } from '../store/invoiceStore'
 import { useSettingsStore } from '../store/settingsStore'
+
+const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  cash: 'Cash',
+  bank_transfer: 'Bank Transfer',
+  e_wallet: 'E-Wallet',
+  other: 'Other',
+}
 
 export function InvoiceDetailPage() {
   const { invoiceId } = useParams()
@@ -15,6 +23,8 @@ export function InvoiceDetailPage() {
   const businessName = useSettingsStore((state) => state.businessName)
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isPrintingPdf, setIsPrintingPdf] = useState(false)
+  const [printErrorMessage, setPrintErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
     let isActive = true
@@ -53,6 +63,31 @@ export function InvoiceDetailPage() {
       }),
     [],
   )
+
+  const handlePrintTemplatePdf = async () => {
+    if (!invoice || isPrintingPdf) {
+      return
+    }
+
+    setPrintErrorMessage(null)
+    setIsPrintingPdf(true)
+
+    try {
+      const { PdfLibRenderer, loadDefaultPdfTemplate, printPdfBlob } = await import('../lib/pdf')
+      const template = await loadDefaultPdfTemplate()
+      const renderer = new PdfLibRenderer()
+      const pdfBlob = await renderer.render(template, {
+        invoice,
+        businessName,
+        currencyCode,
+      })
+      printPdfBlob(pdfBlob)
+    } catch {
+      setPrintErrorMessage('Failed to generate print-ready PDF. Please try again.')
+    } finally {
+      setIsPrintingPdf(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -93,11 +128,13 @@ export function InvoiceDetailPage() {
           Back
         </Link>
 
-        <Button className="gap-2" onClick={() => window.print()}>
+        <Button className="gap-2" onClick={() => void handlePrintTemplatePdf()} disabled={isPrintingPdf}>
           <Printer className="h-4 w-4" />
-          Print again
+          {isPrintingPdf ? 'Preparing PDF...' : 'Print PDF'}
         </Button>
       </div>
+
+      {printErrorMessage && <p className="mb-3 text-sm font-semibold text-red-600">{printErrorMessage}</p>}
 
       <Card className="print:rounded-none print:border-0 print:bg-white print:p-0">
         <CardTitle className="print:mb-2">Invoice Detail</CardTitle>
@@ -130,6 +167,51 @@ export function InvoiceDetailPage() {
             )}
           </div>
         )}
+
+        <div className="mb-4 rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
+          <p className="mb-1 text-xs font-semibold tracking-[0.08em] text-zinc-500 uppercase">Payment</p>
+          <p className="text-sm font-semibold text-zinc-900">
+            Method: {PAYMENT_METHOD_LABEL[invoice.payment.method]}
+          </p>
+
+          {invoice.payment.method === 'cash' && (
+            <>
+              <p className="text-sm text-zinc-700">Amount Paid: {currency.format(invoice.payment.amountPaid)}</p>
+              <p className="text-sm text-zinc-700">
+                Change: {currency.format(computeCashChange(invoice.payment.amountPaid, invoice.total))}
+              </p>
+            </>
+          )}
+
+          {invoice.payment.method === 'bank_transfer' && (
+            <>
+              {invoice.payment.bankName && (
+                <p className="text-sm text-zinc-700">Bank: {invoice.payment.bankName}</p>
+              )}
+              {invoice.payment.accountNumber && (
+                <p className="text-sm text-zinc-700">Account Number: {invoice.payment.accountNumber}</p>
+              )}
+              {invoice.payment.accountName && (
+                <p className="text-sm text-zinc-700">Account Name: {invoice.payment.accountName}</p>
+              )}
+            </>
+          )}
+
+          {invoice.payment.method === 'e_wallet' && (
+            <>
+              {invoice.payment.provider && (
+                <p className="text-sm text-zinc-700">Provider: {invoice.payment.provider}</p>
+              )}
+              {invoice.payment.account && (
+                <p className="text-sm text-zinc-700">Account: {invoice.payment.account}</p>
+              )}
+            </>
+          )}
+
+          {invoice.payment.method === 'other' && invoice.payment.note && (
+            <p className="text-sm text-zinc-700">Note: {invoice.payment.note}</p>
+          )}
+        </div>
 
         <div className="overflow-hidden rounded-xl border border-stone-200">
           <table className="min-w-full border-collapse">

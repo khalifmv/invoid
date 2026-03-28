@@ -4,9 +4,15 @@ export type { Customer, CustomerDraft, CustomerSnapshot } from './customer'
 export type { Product, ProductDraft } from './product'
 export type { AppSettings, CurrencyCode } from './settings'
 export type {
+  BankTransferPayment,
+  CashPayment,
   DiscountType,
+  EWalletPayment,
   Invoice,
   InvoiceDraft,
   InvoiceItem,
   InvoiceTotals,
+  OtherPayment,
+  Payment,
+  PaymentMethod,
 } from './invoice'

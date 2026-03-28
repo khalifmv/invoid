@@ -2,6 +2,32 @@ import type { EntityId, Timestamp } from './common'
 import type { CustomerSnapshot } from './customer'
 
 export type DiscountType = 'percentage' | 'fixed'
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'e_wallet' | 'other'
+
+export interface CashPayment {
+  method: 'cash'
+  amountPaid: number
+}
+
+export interface BankTransferPayment {
+  method: 'bank_transfer'
+  bankName: string
+  accountNumber: string
+  accountName: string
+}
+
+export interface EWalletPayment {
+  method: 'e_wallet'
+  provider: string
+  account: string
+}
+
+export interface OtherPayment {
+  method: 'other'
+  note: string
+}
+
+export type Payment = CashPayment | BankTransferPayment | EWalletPayment | OtherPayment
 
 export interface InvoiceItem {
   id: EntityId
@@ -15,6 +41,7 @@ export interface InvoiceDraft {
   items: InvoiceItem[]
   customerId: EntityId | null
   customerSnapshot: CustomerSnapshot | null
+  payment: Payment
   discountType: DiscountType
   discountValue: number
   taxEnabled: boolean
@@ -29,6 +56,7 @@ export interface Invoice {
   items: InvoiceItem[]
   customerId: EntityId | null
   customerSnapshot: CustomerSnapshot | null
+  payment: Payment
   subtotal: number
   discountAmount: number
   taxAmount: number

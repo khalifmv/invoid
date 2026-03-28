@@ -63,3 +63,15 @@ export const computeInvoiceTotals = (
     total,
   }
 }
+
+export const computeCashChange = (amountPaid: number, total: number): number => {
+  const normalizedAmountPaid = sanitizeNumber(amountPaid)
+  const normalizedTotal = sanitizeNumber(total)
+  return round2(Math.max(0, normalizedAmountPaid - normalizedTotal))
+}
+
+export const isCashPaymentSufficient = (amountPaid: number, total: number): boolean => {
+  const normalizedAmountPaid = sanitizeNumber(amountPaid)
+  const normalizedTotal = sanitizeNumber(total)
+  return normalizedAmountPaid >= normalizedTotal
+}

@@ -4,12 +4,16 @@ import { nowIso } from '../lib/date'
 import { computeInvoiceTotals } from '../lib/invoice-calculations'
 import { generateId } from '../lib/ids'
 import type {
+  BankTransferPayment,
   Customer,
   CustomerSnapshot,
+  EWalletPayment,
   DiscountType,
   Invoice,
   InvoiceItem,
   InvoiceTotals,
+  Payment,
+  PaymentMethod,
   Product,
 } from '../types'
 import { useSettingsStore } from './settingsStore'
@@ -18,6 +22,7 @@ interface InvoiceState {
   items: InvoiceItem[]
   customerId: string | null
   customerSnapshot: CustomerSnapshot | null
+  payment: Payment
   discountType: DiscountType
   discountValue: number
   taxEnabled: boolean
@@ -35,6 +40,11 @@ interface InvoiceActions {
     patch: Partial<Pick<InvoiceItem, 'name' | 'quantity' | 'unitPrice'>>,
   ) => void
   removeItem: (itemId: string) => void
+  setPaymentMethod: (method: PaymentMethod) => void
+  setCashAmountPaid: (amountPaid: number) => void
+  setBankTransferDetails: (patch: Partial<Omit<BankTransferPayment, 'method'>>) => void
+  setEWalletDetails: (patch: Partial<Omit<EWalletPayment, 'method'>>) => void
+  setOtherPaymentNote: (note: string) => void
   setDiscountType: (discountType: DiscountType) => void
   setDiscountValue: (value: number) => void
   setCustomer: (customerId: string | null) => Promise<void>
@@ -47,6 +57,12 @@ interface InvoiceActions {
 }
 
 export type InvoiceStore = InvoiceState & InvoiceActions
+
+type StoredInvoice = Invoice & {
+  customerId?: string | null
+  customerSnapshot?: CustomerSnapshot | null
+  payment?: Payment
+}
 
 const sanitizeTaxRate = (value: number): number => {
   if (!Number.isFinite(value)) {
@@ -73,9 +89,83 @@ const toCustomerSnapshot = (customer: Customer): CustomerSnapshot => {
   }
 }
 
+const createDefaultPayment = (method: PaymentMethod = 'cash'): Payment => {
+  switch (method) {
+    case 'cash':
+      return {
+        method: 'cash',
+        amountPaid: 0,
+      }
+    case 'bank_transfer':
+      return {
+        method: 'bank_transfer',
+        bankName: '',
+        accountNumber: '',
+        accountName: '',
+      }
+    case 'e_wallet':
+      return {
+        method: 'e_wallet',
+        provider: '',
+        account: '',
+      }
+    case 'other':
+      return {
+        method: 'other',
+        note: '',
+      }
+  }
+}
+
+const sanitizePayment = (payment: Payment): Payment => {
+  switch (payment.method) {
+    case 'cash': {
+      const normalizedAmountPaid = Number.isFinite(payment.amountPaid) ? Math.max(payment.amountPaid, 0) : 0
+      return {
+        method: 'cash',
+        amountPaid: normalizedAmountPaid,
+      }
+    }
+    case 'bank_transfer':
+      return {
+        method: 'bank_transfer',
+        bankName: payment.bankName.trim(),
+        accountNumber: payment.accountNumber.trim(),
+        accountName: payment.accountName.trim(),
+      }
+    case 'e_wallet':
+      return {
+        method: 'e_wallet',
+        provider: payment.provider.trim(),
+        account: payment.account.trim(),
+      }
+    case 'other':
+      return {
+        method: 'other',
+        note: payment.note.trim(),
+      }
+  }
+}
+
+const normalizeStoredInvoice = (invoice: StoredInvoice): Invoice => {
+  return {
+    ...invoice,
+    customerId: invoice.customerId ?? null,
+    customerSnapshot: invoice.customerSnapshot ?? null,
+    payment: invoice.payment ? sanitizePayment(invoice.payment) : createDefaultPayment(),
+  }
+}
+
 const createInitialInvoiceState = (): Pick<
   InvoiceState,
-  'items' | 'customerId' | 'customerSnapshot' | 'discountType' | 'discountValue' | 'taxEnabled' | 'taxRate'
+  | 'items'
+  | 'customerId'
+  | 'customerSnapshot'
+  | 'payment'
+  | 'discountType'
+  | 'discountValue'
+  | 'taxEnabled'
+  | 'taxRate'
 > => {
   const defaults = getTaxDefaults()
 
@@ -83,6 +173,7 @@ const createInitialInvoiceState = (): Pick<
     items: [],
     customerId: null,
     customerSnapshot: null,
+    payment: createDefaultPayment(),
     discountType: 'percentage',
     discountValue: 0,
     taxEnabled: defaults.taxEnabled,
@@ -141,6 +232,67 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
       items: state.items.filter((item) => item.id !== itemId),
     })),
 
+  setPaymentMethod: (method) =>
+    set({
+      payment: createDefaultPayment(method),
+    }),
+
+  setCashAmountPaid: (amountPaid) =>
+    set((state) => {
+      if (state.payment.method !== 'cash') {
+        return state
+      }
+
+      return {
+        payment: {
+          ...state.payment,
+          amountPaid: Number.isFinite(amountPaid) ? Math.max(amountPaid, 0) : 0,
+        },
+      }
+    }),
+
+  setBankTransferDetails: (patch) =>
+    set((state) => {
+      if (state.payment.method !== 'bank_transfer') {
+        return state
+      }
+
+      return {
+        payment: {
+          ...state.payment,
+          ...patch,
+        },
+      }
+    }),
+
+  setEWalletDetails: (patch) =>
+    set((state) => {
+      if (state.payment.method !== 'e_wallet') {
+        return state
+      }
+
+      return {
+        payment: {
+          ...state.payment,
+          ...patch,
+        },
+      }
+    }),
+
+  setOtherPaymentNote: (note) =>
+    set((state) => {
+      if (state.payment.method !== 'other') {
+        return state
+      }
+
+      return {
+        payment: {
+          ...state.payment,
+          note,
+        },
+      }
+    }),
+
   setDiscountType: (discountType) => set({ discountType }),
   setDiscountValue: (value) => set({ discountValue: Number.isFinite(value) ? value : 0 }),
   setCustomer: async (customerId) => {
@@ -194,6 +346,7 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
       items: state.items.map((item) => ({ ...item })),
       customerId: state.customerId,
       customerSnapshot: resolvedCustomerSnapshot,
+      payment: sanitizePayment(state.payment),
       subtotal: totals.subtotal,
       discountAmount: totals.discountAmount,
       taxAmount: totals.taxAmount,
@@ -219,6 +372,7 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
       items: [],
       customerId: null,
       customerSnapshot: null,
+      payment: createDefaultPayment(),
       discountType: 'percentage',
       discountValue: 0,
       taxEnabled: defaults.taxEnabled,
@@ -230,7 +384,9 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
     set({ isHistoryLoading: true, historyErrorMessage: null })
 
     try {
-      const invoices = await db.invoices.toArray()
+      const invoices = (await db.invoices.toArray()).map((invoice) =>
+        normalizeStoredInvoice(invoice as StoredInvoice),
+      )
       invoices.sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       set({
         historyInvoices: invoices,
@@ -252,7 +408,7 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
 
     try {
       const invoice = await db.invoices.get(invoiceId)
-      return invoice ?? null
+      return invoice ? normalizeStoredInvoice(invoice as StoredInvoice) : null
     } catch {
       return null
     }

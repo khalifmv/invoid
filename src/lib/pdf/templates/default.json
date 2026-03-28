@@ -1,0 +1,80 @@
+{
+  "id": "default_v1",
+  "name": "Default Invoice",
+  "page": {
+    "size": "A4",
+    "margin": 40
+  },
+  "styles": {
+    "font": "Helvetica",
+    "fontSize": 10.5,
+    "color": "#111827"
+  },
+  "blocks": [
+    {
+      "type": "header",
+      "id": "header",
+      "position": { "x": 40, "y": 790 },
+      "content": {
+        "title": "INVOICE",
+        "businessName": "{{business.name}}",
+        "invoiceId": "Invoice #: {{invoice.id}}",
+        "date": "Date: {{invoice.date}}"
+      }
+    },
+    {
+      "type": "customer",
+      "id": "customer",
+      "position": { "x": 40, "y": 710 },
+      "width": 250,
+      "height": 74,
+      "padding": 10,
+      "content": {
+        "title": "Bill To",
+        "name": "{{customer.name}}",
+        "address": "{{customer.address}}",
+        "phone": "{{customer.phone}}",
+        "email": "{{customer.email}}"
+      }
+    },
+    {
+      "type": "payment",
+      "id": "payment",
+      "position": { "x": 305, "y": 710 },
+      "width": 250,
+      "height": 74,
+      "padding": 10,
+      "content": {
+        "title": "Payment",
+        "method": "{{payment.methodLabel}}",
+        "amountPaid": "{{payment.amountPaidFormatted}}",
+        "change": "{{payment.changeFormatted}}",
+        "details": "{{payment.details}}"
+      }
+    },
+    {
+      "type": "table",
+      "id": "items",
+      "position": { "x": 40, "y": 612 },
+      "rowHeight": 22,
+      "columns": [
+        { "key": "name", "label": "Item", "width": 245, "align": "left" },
+        { "key": "qty", "label": "Qty", "width": 60, "align": "right" },
+        { "key": "price", "label": "Price", "width": 100, "align": "right" },
+        { "key": "total", "label": "Total", "width": 110, "align": "right" }
+      ],
+      "data": "{{items}}"
+    },
+    {
+      "type": "summary",
+      "id": "summary",
+      "position": { "x": 355, "y": 220 },
+      "content": {
+        "subtotal": "{{summary.subtotalFormatted}}",
+        "discount": "{{summary.discountFormatted}}",
+        "tax": "{{summary.taxFormatted}}",
+        "total": "{{summary.totalFormatted}}"
+      }
+    }
+  ]
+}

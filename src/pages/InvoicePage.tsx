@@ -11,7 +11,8 @@ import { NumberInput } from '../components/ui/NumberInput'
 import { Toggle } from '../components/ui/Toggle'
 import { useIsDesktop } from '../hooks/useIsDesktop'
 import { createCurrencyFormatter } from '../lib/currency'
-import type { DiscountType } from '../types'
+import { computeCashChange, isCashPaymentSufficient } from '../lib/invoice-calculations'
+import type { DiscountType, PaymentMethod } from '../types'
 import { useCatalogStore } from '../store/catalogStore'
 import { useCustomerStore } from '../store/customerStore'
 import { selectInvoiceTotals, useInvoiceStore } from '../store/invoiceStore'
@@ -50,9 +51,11 @@ export function InvoicePage() {
   const customers = useCustomerStore((state) => state.customers)
   const createCustomer = useCustomerStore((state) => state.createCustomer)
   const currencyCode = useSettingsStore((state) => state.currency)
+  const businessName = useSettingsStore((state) => state.businessName)
   const {
     items,
     customerId,
+    payment,
     discountType,
     discountValue,
     taxEnabled,
@@ -61,9 +64,14 @@ export function InvoicePage() {
     addManualItem,
     updateItem,
     removeItem,
+    setBankTransferDetails,
+    setCashAmountPaid,
     setCustomer,
     setDiscountType,
     setDiscountValue,
+    setEWalletDetails,
+    setOtherPaymentNote,
+    setPaymentMethod,
     setTaxEnabled,
     setTaxRate,
     saveInvoice,
@@ -73,6 +81,7 @@ export function InvoicePage() {
 
   const [selectedProductId, setSelectedProductId] = useState<string>('')
   const [isSaving, setIsSaving] = useState(false)
+  const [exportErrorMessage, setExportErrorMessage] = useState<string | null>(null)
   const [editingDesktopItemId, setEditingDesktopItemId] = useState<string | null>(null)
   const [itemDrafts, setItemDrafts] = useState<Record<string, InvoiceRowDraft>>({})
   const [mobileEditingItemId, setMobileEditingItemId] = useState<string | null>(null)
@@ -117,6 +126,15 @@ export function InvoicePage() {
     ],
     [],
   )
+  const paymentMethodOptions = useMemo<DropdownOption[]>(
+    () => [
+      { value: 'cash', label: 'Cash' },
+      { value: 'bank_transfer', label: 'Bank Transfer' },
+      { value: 'e_wallet', label: 'E-Wallet' },
+      { value: 'other', label: 'Other' },
+    ],
+    [],
+  )
 
   const canExport = items.length > 0 && totals.total > 0
   const mobileEditingItem = useMemo(
@@ -129,6 +147,13 @@ export function InvoicePage() {
       addItemFromProduct(selectedProduct)
     }
   }
+
+  const cashAmountPaid = payment.method === 'cash' ? payment.amountPaid : 0
+  const cashChange = useMemo(() => computeCashChange(cashAmountPaid, totals.total), [cashAmountPaid, totals.total])
+  const isCashInsufficient = useMemo(
+    () => payment.method === 'cash' && !isCashPaymentSufficient(cashAmountPaid, totals.total),
+    [cashAmountPaid, payment.method, totals.total],
+  )
 
   const handleCustomerChange = (nextCustomerId: string) => {
     void setCustomer(nextCustomerId.length > 0 ? nextCustomerId : null)
@@ -279,13 +304,31 @@ export function InvoicePage() {
       return
     }
 
+    setExportErrorMessage(null)
     setIsSaving(true)
 
     try {
       const savedInvoice = await saveInvoice()
       if (savedInvoice) {
-        clearInvoice()
-        navigate('/history')
+        try {
+          const { PdfLibRenderer, downloadPdfBlob, loadDefaultPdfTemplate } = await import('../lib/pdf')
+          const template = await loadDefaultPdfTemplate()
+          const pdfRenderer = new PdfLibRenderer()
+          const pdfBlob = await pdfRenderer.render(template, {
+            invoice: savedInvoice,
+            businessName,
+            currencyCode,
+          })
+
+          downloadPdfBlob(pdfBlob, `invoice-${savedInvoice.id}.pdf`)
+          clearInvoice()
+          navigate('/history')
+        } catch {
+          clearInvoice()
+          setExportErrorMessage(
+            'Invoice was saved, but PDF generation failed. Please check history and try again.',
+          )
+        }
       }
     } finally {
       setIsSaving(false)
@@ -512,6 +555,105 @@ export function InvoicePage() {
               />
             </div>
 
+            <div className="mb-4 border-t border-stone-200 pt-3">
+              <label htmlFor="payment-method" className="mb-1 block text-xs font-semibold text-zinc-600">
+                Payment Method
+              </label>
+              <DropdownSelect
+                id="payment-method"
+                value={payment.method}
+                onChange={(nextValue) => setPaymentMethod(nextValue as PaymentMethod)}
+                options={paymentMethodOptions}
+              />
+
+              {payment.method === 'cash' && (
+                <div className="mt-3 grid gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-zinc-600">Amount Paid</label>
+                    <NumberInput
+                      min={0}
+                      value={payment.amountPaid}
+                      onValueChange={setCashAmountPaid}
+                      aria-label="Amount paid"
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-600">Change</span>
+                      <span className="font-semibold text-zinc-900">{currency.format(cashChange)}</span>
+                    </div>
+                    {isCashInsufficient && (
+                      <p className="mt-1 text-xs font-semibold text-red-600">
+                        Amount paid is below total.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {payment.method === 'bank_transfer' && (
+                <div className="mt-3 grid gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-zinc-600">Bank Name</label>
+                    <Input
+                      value={payment.bankName}
+                      onChange={(event) => setBankTransferDetails({ bankName: event.target.value })}
+                      placeholder="Bank name"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-zinc-600">Account Number</label>
+                    <Input
+                      value={payment.accountNumber}
+                      onChange={(event) => setBankTransferDetails({ accountNumber: event.target.value })}
+                      placeholder="Account number"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-zinc-600">Account Name</label>
+                    <Input
+                      value={payment.accountName}
+                      onChange={(event) => setBankTransferDetails({ accountName: event.target.value })}
+                      placeholder="Account holder"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {payment.method === 'e_wallet' && (
+                <div className="mt-3 grid gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-zinc-600">Provider</label>
+                    <Input
+                      value={payment.provider}
+                      onChange={(event) => setEWalletDetails({ provider: event.target.value })}
+                      placeholder="e.g. GoPay"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-zinc-600">Account</label>
+                    <Input
+                      value={payment.account}
+                      onChange={(event) => setEWalletDetails({ account: event.target.value })}
+                      placeholder="Phone or account"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {payment.method === 'other' && (
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Note</label>
+                  <Input
+                    value={payment.note}
+                    onChange={(event) => setOtherPaymentNote(event.target.value)}
+                    placeholder="Payment note"
+                  />
+                </div>
+              )}
+            </div>
+
             <dl className="my-4 border-t border-stone-200 pt-3">
               <div className="flex justify-between py-1 text-sm">
                 <dt>Subtotal</dt>
@@ -535,8 +677,10 @@ export function InvoicePage() {
               </div>
             </dl>
 
+            {exportErrorMessage && <p className="mb-3 text-xs font-semibold text-red-600">{exportErrorMessage}</p>}
+
             <Button className="h-11 w-full" disabled={!canExport || isSaving} onClick={handleExport}>
-              {isSaving ? 'Saving...' : 'Export PDF'}
+              {isSaving ? 'Exporting...' : 'Export PDF'}
             </Button>
           </Card>
         </aside>
