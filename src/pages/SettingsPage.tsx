@@ -70,7 +70,7 @@ export function SettingsPage() {
             <label className="mb-1 block text-xs font-semibold text-zinc-600">Business logo</label>
 
             <div className="rounded-xl border border-stone-300 bg-white p-3">
-              <div className="relative h-56 overflow-hidden rounded-md border-2 border-zinc-700 bg-zinc-200">
+              <div className="relative h-56 overflow-hidden rounded-md border-1 border-zinc-400 bg-zinc-200">
                 {logoDataUrl ? (
                   <img
                     alt="Business logo preview"

@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { Link } from 'react-router'
 import { Card, CardTitle } from '../components/ui/Card'
 import { createCurrencyFormatter } from '../lib/currency'
 import { useInvoiceStore } from '../store/invoiceStore'
@@ -53,7 +54,15 @@ export function HistoryPage() {
                   </p>
                   <p className="truncate text-xs text-zinc-500">{invoice.id}</p>
                 </div>
-                <div className="text-sm font-bold text-zinc-900">{currency.format(invoice.total)}</div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-zinc-900">{currency.format(invoice.total)}</p>
+                  <Link
+                    className="text-xs font-semibold text-zinc-600 underline-offset-2 hover:text-zinc-900 hover:underline"
+                    to={`/history/${invoice.id}`}
+                  >
+                    View detail
+                  </Link>
+                </div>
               </article>
             ))}
           </div>

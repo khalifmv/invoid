@@ -19,6 +19,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+@media print {
+  body {
+    background: #fff;
+  }
+}
+
 @keyframes dialog-backdrop-in {
   from {
     opacity: 0;

@@ -32,6 +32,7 @@ interface InvoiceActions {
   saveInvoice: () => Promise<Invoice | null>
   clearInvoice: () => void
   loadInvoices: () => Promise<void>
+  getInvoiceById: (invoiceId: string) => Promise<Invoice | null>
 }
 
 export type InvoiceStore = InvoiceState & InvoiceActions
@@ -192,6 +193,20 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
         isHistoryLoading: false,
         historyErrorMessage: 'Failed to load invoice history from IndexedDB.',
       })
+    }
+  },
+
+  getInvoiceById: async (invoiceId) => {
+    const inMemory = get().historyInvoices.find((invoice) => invoice.id === invoiceId)
+    if (inMemory) {
+      return inMemory
+    }
+
+    try {
+      const invoice = await db.invoices.get(invoiceId)
+      return invoice ?? null
+    } catch {
+      return null
     }
   },
 }))
