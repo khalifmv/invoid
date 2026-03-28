@@ -3,15 +3,17 @@ import { Outlet } from 'react-router'
 import invoidLogo from '../assets/invoid.svg?raw'
 import { AppNav } from '../components/nav/AppNav'
 import { useCatalogStore } from '../store/catalogStore'
+import { useCustomerStore } from '../store/customerStore'
 import { useSettingsStore } from '../store/settingsStore'
 
 export function AppLayout() {
-  const hydrate = useCatalogStore((state) => state.hydrate)
+  const hydrateCatalog = useCatalogStore((state) => state.hydrate)
+  const hydrateCustomers = useCustomerStore((state) => state.hydrate)
   const businessName = useSettingsStore((state) => state.businessName)
 
   useEffect(() => {
-    void hydrate()
-  }, [hydrate])
+    void Promise.all([hydrateCatalog(), hydrateCustomers()])
+  }, [hydrateCatalog, hydrateCustomers])
 
   return (
     <div className="min-h-screen bg-stone-100 text-zinc-900 md:flex print:bg-white">

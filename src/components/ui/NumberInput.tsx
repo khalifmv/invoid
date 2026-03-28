@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { InputHTMLAttributes } from 'react'
 import { Input } from './Input'
 
@@ -68,35 +68,64 @@ export function NumberInput({
   ...props
 }: NumberInputProps) {
   const [displayValue, setDisplayValue] = useState<string>(String(value))
+  const [isFocused, setIsFocused] = useState(false)
 
-  const nextInputMode = useMemo<'decimal' | 'numeric'>(
+  const normalizedMin = useMemo(() => {
+    if (typeof min === 'number') {
+      return min
+    }
+
+    if (typeof min === 'string' && min.trim().length > 0) {
+      const parsedMin = Number.parseFloat(min)
+      return Number.isFinite(parsedMin) ? parsedMin : undefined
+    }
+
+    return undefined
+  }, [min])
+
+  const normalizedMax = useMemo(() => {
+    if (typeof max === 'number') {
+      return max
+    }
+
+    if (typeof max === 'string' && max.trim().length > 0) {
+      const parsedMax = Number.parseFloat(max)
+      return Number.isFinite(parsedMax) ? parsedMax : undefined
+    }
+
+    return undefined
+  }, [max])
+
+  const nextInputMode = useMemo<InputHTMLAttributes<HTMLInputElement>['inputMode']>(
     () => inputMode ?? (allowDecimal ? 'decimal' : 'numeric'),
     [allowDecimal, inputMode],
   )
 
-  useEffect(() => {
-    const next = String(value)
-    setDisplayValue((current) => (current === next ? current : next))
-  }, [value])
+  const renderedValue = isFocused ? displayValue : String(value)
 
   return (
     <Input
       type="text"
       inputMode={nextInputMode}
-      value={displayValue}
+      value={renderedValue}
+      onFocus={() => {
+        setDisplayValue(String(value))
+        setIsFocused(true)
+      }}
       onChange={(event) => {
         const normalized = normalizeNumberText(event.target.value, allowDecimal)
         setDisplayValue(normalized)
 
         const parsed = Number.parseFloat(normalized)
-        const safeValue = clamp(Number.isFinite(parsed) ? parsed : 0, min, max)
+        const safeValue = clamp(Number.isFinite(parsed) ? parsed : 0, normalizedMin, normalizedMax)
         onValueChange(safeValue)
       }}
       onBlur={() => {
         const parsed = Number.parseFloat(displayValue)
-        const safeValue = clamp(Number.isFinite(parsed) ? parsed : 0, min, max)
+        const safeValue = clamp(Number.isFinite(parsed) ? parsed : 0, normalizedMin, normalizedMax)
         const canonical = String(safeValue)
         setDisplayValue(canonical)
+        setIsFocused(false)
         onValueChange(safeValue)
       }}
       {...props}

@@ -1,4 +1,4 @@
-import { Clock, FileText, Package, Settings } from 'lucide-react'
+import { Clock, FileText, Package, Settings, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { NavLink } from 'react-router'
 import { cn } from '../../lib/cn'
@@ -12,6 +12,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Invoice', icon: FileText },
   { to: '/catalog', label: 'Catalog', icon: Package },
+  { to: '/customers', label: 'Customers', icon: Users },
   { to: '/history', label: 'History', icon: Clock },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -19,7 +20,7 @@ const NAV_ITEMS: NavItem[] = [
 export function AppNav() {
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 flex h-16 border-t border-stone-200 bg-white md:static md:h-auto md:w-52 md:flex-col md:gap-1 md:border-t-0 md:border-r md:px-3 md:py-4"
+      className="fixed inset-x-0 bottom-0 z-30 flex h-16 border-t border-stone-200 bg-white md:static md:h-full md:w-52 md:flex-col md:gap-1 md:border-t-0 md:border-r md:px-3 md:py-4"
       aria-label="Primary"
     >
       <span className="hidden px-2 pb-3 text-xs font-bold tracking-[0.16em] text-zinc-500 md:block">

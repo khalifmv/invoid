@@ -1,4 +1,5 @@
 import type { EntityId, Timestamp } from './common'
+import type { CustomerSnapshot } from './customer'
 
 export type DiscountType = 'percentage' | 'fixed'
 
@@ -12,6 +13,8 @@ export interface InvoiceItem {
 
 export interface InvoiceDraft {
   items: InvoiceItem[]
+  customerId: EntityId | null
+  customerSnapshot: CustomerSnapshot | null
   discountType: DiscountType
   discountValue: number
   taxEnabled: boolean
@@ -24,6 +27,8 @@ export interface Invoice {
   createdAt: Timestamp
   updatedAt: Timestamp
   items: InvoiceItem[]
+  customerId: EntityId | null
+  customerSnapshot: CustomerSnapshot | null
   subtotal: number
   discountAmount: number
   taxAmount: number

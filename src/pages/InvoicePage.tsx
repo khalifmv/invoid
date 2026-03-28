@@ -13,6 +13,7 @@ import { useIsDesktop } from '../hooks/useIsDesktop'
 import { createCurrencyFormatter } from '../lib/currency'
 import type { DiscountType } from '../types'
 import { useCatalogStore } from '../store/catalogStore'
+import { useCustomerStore } from '../store/customerStore'
 import { selectInvoiceTotals, useInvoiceStore } from '../store/invoiceStore'
 import { useSettingsStore } from '../store/settingsStore'
 
@@ -28,13 +29,30 @@ interface InvoiceRowDraft {
   unitPrice: number
 }
 
+interface CustomerFormState {
+  name: string
+  phone: string
+  email: string
+  address: string
+}
+
+const EMPTY_CUSTOMER_FORM: CustomerFormState = {
+  name: '',
+  phone: '',
+  email: '',
+  address: '',
+}
+
 export function InvoicePage() {
   const isDesktop = useIsDesktop()
   const navigate = useNavigate()
   const products = useCatalogStore((state) => state.products)
+  const customers = useCustomerStore((state) => state.customers)
+  const createCustomer = useCustomerStore((state) => state.createCustomer)
   const currencyCode = useSettingsStore((state) => state.currency)
   const {
     items,
+    customerId,
     discountType,
     discountValue,
     taxEnabled,
@@ -43,6 +61,7 @@ export function InvoicePage() {
     addManualItem,
     updateItem,
     removeItem,
+    setCustomer,
     setDiscountType,
     setDiscountValue,
     setTaxEnabled,
@@ -62,6 +81,9 @@ export function InvoicePage() {
     quantity: 1,
     unitPrice: 0,
   })
+  const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false)
+  const [isSavingCustomer, setIsSavingCustomer] = useState(false)
+  const [customerForm, setCustomerForm] = useState<CustomerFormState>(EMPTY_CUSTOMER_FORM)
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === selectedProductId) ?? null,
@@ -76,6 +98,17 @@ export function InvoicePage() {
         label: `${product.name} (${currency.format(product.defaultPrice)})`,
       })),
     [currency, products],
+  )
+  const customerOptions = useMemo<DropdownOption[]>(
+    () =>
+      customers.map((customer) => {
+        const detail = customer.phone ?? customer.email ?? customer.address
+        return {
+          value: customer.id,
+          label: detail ? `${customer.name} • ${detail}` : customer.name,
+        }
+      }),
+    [customers],
   )
   const discountOptions = useMemo<DropdownOption[]>(
     () => [
@@ -94,6 +127,39 @@ export function InvoicePage() {
   const handleAddSelectedProduct = () => {
     if (selectedProduct) {
       addItemFromProduct(selectedProduct)
+    }
+  }
+
+  const handleCustomerChange = (nextCustomerId: string) => {
+    void setCustomer(nextCustomerId.length > 0 ? nextCustomerId : null)
+  }
+
+  const closeCustomerDialog = () => {
+    setIsCustomerDialogOpen(false)
+    setCustomerForm(EMPTY_CUSTOMER_FORM)
+  }
+
+  const saveNewCustomer = async () => {
+    if (customerForm.name.trim().length === 0 || isSavingCustomer) {
+      return
+    }
+
+    setIsSavingCustomer(true)
+
+    try {
+      const createdCustomer = await createCustomer(
+        customerForm.name,
+        customerForm.phone,
+        customerForm.email,
+        customerForm.address,
+      )
+
+      if (createdCustomer) {
+        await setCustomer(createdCustomer.id)
+        closeCustomerDialog()
+      }
+    } finally {
+      setIsSavingCustomer(false)
     }
   }
 
@@ -230,6 +296,23 @@ export function InvoicePage() {
     <>
       <section className="mx-auto grid w-full gap-4 lg:grid-cols-[1.8fr_1fr]">
         <div className="grid gap-4">
+          <Card>
+            <CardTitle>Customer</CardTitle>
+
+            <div className="flex flex-wrap gap-2">
+              <DropdownSelect
+                value={customerId ?? ''}
+                onChange={handleCustomerChange}
+                options={[{ value: '', label: 'Walk-in / no customer' }, ...customerOptions]}
+                ariaLabel="Select customer"
+                className="min-w-60 flex-1"
+              />
+              <Button variant="outline" onClick={() => setIsCustomerDialogOpen(true)}>
+                + New Customer
+              </Button>
+            </div>
+          </Card>
+
           <Card>
             <CardTitle>Invoice Items</CardTitle>
 
@@ -498,6 +581,61 @@ export function InvoicePage() {
             min={0}
             value={mobileDraft.unitPrice}
             onValueChange={(unitPrice) => setMobileDraft((prev) => ({ ...prev, unitPrice }))}
+          />
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={isCustomerDialogOpen}
+        onClose={closeCustomerDialog}
+        title="New Customer"
+        footer={
+          <>
+            <Button variant="outline" onClick={closeCustomerDialog}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void saveNewCustomer()}
+              disabled={customerForm.name.trim().length === 0 || isSavingCustomer}
+            >
+              {isSavingCustomer ? 'Saving...' : 'Save'}
+            </Button>
+          </>
+        }
+      >
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">Name</label>
+          <Input
+            value={customerForm.name}
+            onChange={(event) => setCustomerForm((prev) => ({ ...prev, name: event.target.value }))}
+            placeholder="Customer name"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">Phone</label>
+          <Input
+            value={customerForm.phone}
+            onChange={(event) => setCustomerForm((prev) => ({ ...prev, phone: event.target.value }))}
+            placeholder="Optional"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">Email</label>
+          <Input
+            value={customerForm.email}
+            onChange={(event) => setCustomerForm((prev) => ({ ...prev, email: event.target.value }))}
+            placeholder="Optional"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">Address</label>
+          <Input
+            value={customerForm.address}
+            onChange={(event) => setCustomerForm((prev) => ({ ...prev, address: event.target.value }))}
+            placeholder="Optional"
           />
         </div>
       </Dialog>

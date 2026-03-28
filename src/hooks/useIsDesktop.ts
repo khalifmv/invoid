@@ -21,7 +21,6 @@ export function useIsDesktop(): boolean {
       setIsDesktop(event.matches)
     }
 
-    setIsDesktop(mediaQueryList.matches)
     mediaQueryList.addEventListener('change', update)
 
     return () => {

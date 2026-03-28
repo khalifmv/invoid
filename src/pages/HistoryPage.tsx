@@ -52,6 +52,9 @@ export function HistoryPage() {
                   <p className="text-sm font-semibold text-zinc-800">
                     {dateTime.format(new Date(invoice.createdAt))}
                   </p>
+                  {invoice.customerSnapshot?.name && (
+                    <p className="truncate text-xs text-zinc-600">Customer: {invoice.customerSnapshot.name}</p>
+                  )}
                   <p className="truncate text-xs text-zinc-500">{invoice.id}</p>
                 </div>
                 <div className="text-right">

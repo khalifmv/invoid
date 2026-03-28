@@ -3,11 +3,21 @@ import { db } from '../lib/db'
 import { nowIso } from '../lib/date'
 import { computeInvoiceTotals } from '../lib/invoice-calculations'
 import { generateId } from '../lib/ids'
-import type { DiscountType, Invoice, InvoiceItem, InvoiceTotals, Product } from '../types'
+import type {
+  Customer,
+  CustomerSnapshot,
+  DiscountType,
+  Invoice,
+  InvoiceItem,
+  InvoiceTotals,
+  Product,
+} from '../types'
 import { useSettingsStore } from './settingsStore'
 
 interface InvoiceState {
   items: InvoiceItem[]
+  customerId: string | null
+  customerSnapshot: CustomerSnapshot | null
   discountType: DiscountType
   discountValue: number
   taxEnabled: boolean
@@ -27,6 +37,7 @@ interface InvoiceActions {
   removeItem: (itemId: string) => void
   setDiscountType: (discountType: DiscountType) => void
   setDiscountValue: (value: number) => void
+  setCustomer: (customerId: string | null) => Promise<void>
   setTaxEnabled: (enabled: boolean) => void
   setTaxRate: (value: number) => void
   saveInvoice: () => Promise<Invoice | null>
@@ -53,14 +64,25 @@ const getTaxDefaults = () => {
   }
 }
 
+const toCustomerSnapshot = (customer: Customer): CustomerSnapshot => {
+  return {
+    name: customer.name,
+    phone: customer.phone,
+    email: customer.email,
+    address: customer.address,
+  }
+}
+
 const createInitialInvoiceState = (): Pick<
   InvoiceState,
-  'items' | 'discountType' | 'discountValue' | 'taxEnabled' | 'taxRate'
+  'items' | 'customerId' | 'customerSnapshot' | 'discountType' | 'discountValue' | 'taxEnabled' | 'taxRate'
 > => {
   const defaults = getTaxDefaults()
 
   return {
     items: [],
+    customerId: null,
+    customerSnapshot: null,
     discountType: 'percentage',
     discountValue: 0,
     taxEnabled: defaults.taxEnabled,
@@ -121,6 +143,23 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
 
   setDiscountType: (discountType) => set({ discountType }),
   setDiscountValue: (value) => set({ discountValue: Number.isFinite(value) ? value : 0 }),
+  setCustomer: async (customerId) => {
+    if (!customerId) {
+      set({ customerId: null, customerSnapshot: null })
+      return
+    }
+
+    const customer = await db.customers.get(customerId)
+    if (!customer) {
+      set({ customerId: null, customerSnapshot: null })
+      return
+    }
+
+    set({
+      customerId,
+      customerSnapshot: toCustomerSnapshot(customer),
+    })
+  },
   setTaxEnabled: (enabled) => set({ taxEnabled: enabled }),
   setTaxRate: (value) => set({ taxRate: Number.isFinite(value) ? value : 0 }),
 
@@ -143,11 +182,18 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
     }
 
     const timestamp = nowIso()
+    const latestCustomer = state.customerId ? await db.customers.get(state.customerId) : undefined
+    const resolvedCustomerSnapshot = latestCustomer
+      ? toCustomerSnapshot(latestCustomer)
+      : state.customerSnapshot
+
     const invoice: Invoice = {
       id: generateId(),
       createdAt: timestamp,
       updatedAt: timestamp,
       items: state.items.map((item) => ({ ...item })),
+      customerId: state.customerId,
+      customerSnapshot: resolvedCustomerSnapshot,
       subtotal: totals.subtotal,
       discountAmount: totals.discountAmount,
       taxAmount: totals.taxAmount,
@@ -171,6 +217,8 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
     const defaults = getTaxDefaults()
     set({
       items: [],
+      customerId: null,
+      customerSnapshot: null,
       discountType: 'percentage',
       discountValue: 0,
       taxEnabled: defaults.taxEnabled,

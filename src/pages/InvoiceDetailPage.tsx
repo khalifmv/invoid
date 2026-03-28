@@ -115,6 +115,22 @@ export function InvoiceDetailPage() {
           </div>
         </div>
 
+        {invoice.customerSnapshot && (
+          <div className="mb-4 rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
+            <p className="mb-1 text-xs font-semibold tracking-[0.08em] text-zinc-500 uppercase">Customer</p>
+            <p className="text-sm font-semibold text-zinc-900">{invoice.customerSnapshot.name}</p>
+            {invoice.customerSnapshot.phone && (
+              <p className="text-sm text-zinc-700">Phone: {invoice.customerSnapshot.phone}</p>
+            )}
+            {invoice.customerSnapshot.email && (
+              <p className="text-sm text-zinc-700">Email: {invoice.customerSnapshot.email}</p>
+            )}
+            {invoice.customerSnapshot.address && (
+              <p className="text-sm text-zinc-700">Address: {invoice.customerSnapshot.address}</p>
+            )}
+          </div>
+        )}
+
         <div className="overflow-hidden rounded-xl border border-stone-200">
           <table className="min-w-full border-collapse">
             <thead className="bg-stone-100">
