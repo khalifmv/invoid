@@ -52,6 +52,7 @@ export function InvoicePage() {
   const createCustomer = useCustomerStore((state) => state.createCustomer)
   const currencyCode = useSettingsStore((state) => state.currency)
   const businessName = useSettingsStore((state) => state.businessName)
+  const logoDataUrl = useSettingsStore((state) => state.logoDataUrl)
   const {
     items,
     customerId,
@@ -318,6 +319,7 @@ export function InvoicePage() {
             invoice: savedInvoice,
             businessName,
             currencyCode,
+            logoDataUrl,
           })
 
           downloadPdfBlob(pdfBlob, `invoice-${savedInvoice.id}.pdf`)
@@ -337,7 +339,7 @@ export function InvoicePage() {
 
   return (
     <>
-      <section className="mx-auto grid w-full gap-4 lg:grid-cols-[1.8fr_1fr]">
+      <section className="mx-auto grid w-full items-start gap-4 lg:grid-cols-[1.8fr_1fr]">
         <div className="grid gap-4">
           <Card>
             <CardTitle>Customer</CardTitle>

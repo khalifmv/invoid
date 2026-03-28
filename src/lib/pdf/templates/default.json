@@ -12,6 +12,16 @@
   },
   "blocks": [
     {
+      "type": "logo",
+      "id": "logo",
+      "position": { "x": 525, "y": 790 },
+      "width": 28,
+      "height": 28,
+      "content": {
+        "dataUrl": "{{business.logoDataUrl}}"
+      }
+    },
+    {
       "type": "header",
       "id": "header",
       "position": { "x": 40, "y": 790 },

@@ -22,7 +22,7 @@ export function AppLayout() {
       </div>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="flex w-full items-center justify-between gap-3 border-b border-stone-200 bg-white px-4 py-3 md:justify-start md:px-6 print:hidden">
+        <header className="sticky top-0 flex w-full items-center justify-between gap-3 border-b border-stone-200 bg-white px-4 py-3 md:justify-start md:px-6 print:hidden">
           <span
             className="inline-flex h-4 w-auto text-black [&_svg]:h-full [&_svg]:w-auto"
             aria-label="INVOID"

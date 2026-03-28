@@ -21,6 +21,7 @@ export function InvoiceDetailPage() {
   const getInvoiceById = useInvoiceStore((state) => state.getInvoiceById)
   const currencyCode = useSettingsStore((state) => state.currency)
   const businessName = useSettingsStore((state) => state.businessName)
+  const logoDataUrl = useSettingsStore((state) => state.logoDataUrl)
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isPrintingPdf, setIsPrintingPdf] = useState(false)
@@ -80,8 +81,9 @@ export function InvoiceDetailPage() {
         invoice,
         businessName,
         currencyCode,
+        logoDataUrl,
       })
-      printPdfBlob(pdfBlob)
+      printPdfBlob(pdfBlob, `invoice-${invoice.id}.pdf`)
     } catch {
       setPrintErrorMessage('Failed to generate print-ready PDF. Please try again.')
     } finally {

@@ -22,6 +22,15 @@ export interface PdfHeaderBlock extends PdfTemplateBaseBlock {
   }
 }
 
+export interface PdfLogoBlock extends PdfTemplateBaseBlock {
+  type: 'logo'
+  width?: number
+  height?: number
+  content: {
+    dataUrl?: string
+  }
+}
+
 export interface PdfTableColumn {
   key: string
   label: string
@@ -75,6 +84,7 @@ export interface PdfPaymentBlock extends PdfTemplateBaseBlock {
 }
 
 export type PdfTemplateBlock =
+  | PdfLogoBlock
   | PdfHeaderBlock
   | PdfTableBlock
   | PdfSummaryBlock

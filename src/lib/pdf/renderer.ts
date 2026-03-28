@@ -2,7 +2,7 @@ import { PDFDocument, StandardFonts } from 'pdf-lib'
 import type { CurrencyCode, Invoice, PaymentMethod } from '../../types'
 import { computeCashChange } from '../invoice-calculations'
 import { bindTemplateData } from './bindings'
-import { parseTemplateColor, renderTemplateBlock } from './blocks'
+import { parseTemplateColor, renderLogoBlock, renderTemplateBlock } from './blocks'
 import type { PdfSummaryBlock, PdfTableBlock, PdfTemplate } from './template'
 import { validatePdfTemplate } from './template'
 
@@ -43,7 +43,12 @@ const toPaymentDetails = (invoice: Invoice): string => {
   }
 }
 
-const createRenderModel = (invoice: Invoice, businessName: string, currencyCode: CurrencyCode) => {
+const createRenderModel = (
+  invoice: Invoice,
+  businessName: string,
+  currencyCode: CurrencyCode,
+  logoDataUrl: string | null | undefined,
+) => {
   const currency = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currencyCode,
@@ -71,6 +76,7 @@ const createRenderModel = (invoice: Invoice, businessName: string, currencyCode:
   return {
     business: {
       name: businessName.trim().length > 0 ? businessName : 'Invoid',
+      logoDataUrl: logoDataUrl ?? '',
     },
     invoice: {
       id: invoice.id,
@@ -240,6 +246,7 @@ export interface PdfRenderData {
   invoice: Invoice
   businessName: string
   currencyCode: CurrencyCode
+  logoDataUrl?: string | null
 }
 
 export interface PdfRenderer {
@@ -254,12 +261,19 @@ export class PdfLibRenderer implements PdfRenderer {
     }
 
     const pdfDocument = await PDFDocument.create()
+    pdfDocument.setTitle(`invoice-${data.invoice.id}`)
+    pdfDocument.setProducer('Invoid')
     const pageSize = PAGE_SIZE[template.page.size]
     let currentPage = pdfDocument.addPage([pageSize.width, pageSize.height])
     const font = await pdfDocument.embedFont(getFontName(template.styles.font))
     const color = parseTemplateColor(template.styles.color)
 
-    const renderModel = createRenderModel(data.invoice, data.businessName, data.currencyCode)
+    const renderModel = createRenderModel(
+      data.invoice,
+      data.businessName,
+      data.currencyCode,
+      data.logoDataUrl,
+    )
     const boundTemplate = bindTemplateData(template, renderModel)
     const summaryBlocks = boundTemplate.blocks.filter(
       (block): block is PdfSummaryBlock => block.type === 'summary',
@@ -269,6 +283,17 @@ export class PdfLibRenderer implements PdfRenderer {
 
     for (const block of boundTemplate.blocks) {
       if (block.type === 'summary') {
+        continue
+      }
+
+      if (block.type === 'logo') {
+        await renderLogoBlock(block, {
+          page: currentPage,
+          pdfDocument,
+          font,
+          color,
+          fontSize: template.styles.fontSize,
+        })
         continue
       }
 
@@ -335,8 +360,9 @@ export const downloadPdfBlob = (blob: Blob, filename: string): void => {
   URL.revokeObjectURL(objectUrl)
 }
 
-export const printPdfBlob = (blob: Blob): void => {
-  const objectUrl = URL.createObjectURL(blob)
+export const printPdfBlob = (blob: Blob, filename = 'invoice.pdf'): void => {
+  const printableFile = new File([blob], filename, { type: 'application/pdf' })
+  const objectUrl = URL.createObjectURL(printableFile)
   const iframe = document.createElement('iframe')
   iframe.style.position = 'fixed'
   iframe.style.right = '0'

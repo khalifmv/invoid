@@ -1,7 +1,8 @@
-import { rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib'
+import { rgb, type PDFDocument, type PDFFont, type PDFPage, type RGB } from 'pdf-lib'
 import type {
   PdfCustomerBlock,
   PdfHeaderBlock,
+  PdfLogoBlock,
   PdfPaymentBlock,
   PdfSummaryBlock,
   PdfTableBlock,
@@ -13,6 +14,10 @@ interface PdfRenderContext {
   font: PDFFont
   color: RGB
   fontSize: number
+}
+
+interface PdfLogoRenderContext extends PdfRenderContext {
+  pdfDocument: PDFDocument
 }
 
 const CELL_PADDING_X = 8
@@ -105,7 +110,7 @@ const renderHeaderBlock = (block: PdfHeaderBlock, context: PdfRenderContext): vo
   const x = toNumberValue(block.position.x)
   const y = toNumberValue(block.position.y)
   const pageWidth = context.page.getWidth()
-  const rightPadding = 40
+  const rightPadding = 78
   const title = toStringValue(block.content.title)
   const businessName = toStringValue(block.content.businessName)
   const invoiceId = toStringValue(block.content.invoiceId)
@@ -276,6 +281,56 @@ const renderSummaryBlock = (block: PdfSummaryBlock, context: PdfRenderContext): 
   })
 }
 
+const decodeBase64 = (input: string): Uint8Array => {
+  const binary = atob(input)
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0))
+}
+
+export const renderLogoBlock = async (
+  block: PdfLogoBlock,
+  context: PdfLogoRenderContext,
+): Promise<void> => {
+  const dataUrl = toStringValue(block.content.dataUrl)
+  if (dataUrl.length === 0) {
+    return
+  }
+
+  const match = dataUrl.match(/^data:(image\/(?:png|jpeg|jpg));base64,(.+)$/)
+  if (!match) {
+    return
+  }
+
+  const [, mimeType, encoded] = match
+
+  try {
+    const bytes = decodeBase64(encoded)
+    const image =
+      mimeType === 'image/png'
+        ? await context.pdfDocument.embedPng(bytes)
+        : await context.pdfDocument.embedJpg(bytes)
+
+    const x = toNumberValue(block.position.x)
+    const y = toNumberValue(block.position.y)
+    const width = Math.max(24, toNumberValue(block.width, 84))
+    const height = Math.max(16, toNumberValue(block.height, 28))
+
+    const scale = Math.min(width / image.width, height / image.height)
+    const drawWidth = image.width * scale
+    const drawHeight = image.height * scale
+    const drawX = x + (width - drawWidth) * 0.5
+    const drawY = y - height + (height - drawHeight) * 0.5
+
+    context.page.drawImage(image, {
+      x: drawX,
+      y: drawY,
+      width: drawWidth,
+      height: drawHeight,
+    })
+  } catch {
+    // Ignore malformed image data so PDF generation still succeeds.
+  }
+}
+
 export const parseTemplateColor = (hexColor: string): RGB => {
   const normalized = hexColor.trim().replace('#', '')
   if (!/^[\da-fA-F]{6}$/.test(normalized)) {
@@ -290,6 +345,8 @@ export const parseTemplateColor = (hexColor: string): RGB => {
 
 export const renderTemplateBlock = (block: PdfTemplateBlock, context: PdfRenderContext): void => {
   switch (block.type) {
+    case 'logo':
+      break
     case 'header':
       renderHeaderBlock(block, context)
       break
