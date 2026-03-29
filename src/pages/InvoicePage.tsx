@@ -11,8 +11,20 @@ import { NumberInput } from '../components/ui/NumberInput'
 import { Toggle } from '../components/ui/Toggle'
 import { useIsDesktop } from '../hooks/useIsDesktop'
 import { createCurrencyFormatter } from '../lib/currency'
-import { computeCashChange, isCashPaymentSufficient } from '../lib/invoice-calculations'
-import type { DiscountType, PaymentMethod } from '../types'
+import { computeCashChange, computeInvoiceLineTotal, isCashPaymentSufficient } from '../lib/invoice-calculations'
+import {
+  DEFAULT_PRICING_MODE,
+  DEFAULT_UNIT_CODE,
+  formatItemAmountLabel,
+  isDecimalAllowedForUnit,
+  normalizeCustomUnitLabel,
+  normalizePricingMode,
+  normalizeUnitCode,
+  PRICING_MODE_OPTIONS,
+  sanitizeQuantityForUnit,
+  UNIT_OPTIONS,
+} from '../lib/item-semantics'
+import type { DiscountType, PaymentMethod, PricingMode, UnitCode } from '../types'
 import { useCatalogStore } from '../store/catalogStore'
 import { useCustomerStore } from '../store/customerStore'
 import { selectInvoiceTotals, useInvoiceStore } from '../store/invoiceStore'
@@ -21,12 +33,18 @@ import { useSettingsStore } from '../store/settingsStore'
 interface MobileItemDraft {
   name: string
   quantity: number
+  unitCode: UnitCode
+  customUnitLabel: string
+  pricingMode: PricingMode
   unitPrice: number
 }
 
 interface InvoiceRowDraft {
   name: string
   quantity: number
+  unitCode: UnitCode
+  customUnitLabel: string
+  pricingMode: PricingMode
   unitPrice: number
 }
 
@@ -42,6 +60,26 @@ const EMPTY_CUSTOMER_FORM: CustomerFormState = {
   phone: '',
   email: '',
   address: '',
+}
+
+const toInvoiceRowDraft = (item: {
+  name: string
+  quantity: number
+  unitCode?: UnitCode
+  customUnitLabel?: string
+  pricingMode?: PricingMode
+  unitPrice: number
+}): InvoiceRowDraft => {
+  const unitCode = normalizeUnitCode(item.unitCode ?? DEFAULT_UNIT_CODE)
+
+  return {
+    name: item.name,
+    quantity: sanitizeQuantityForUnit(item.quantity, unitCode),
+    unitCode,
+    customUnitLabel: normalizeCustomUnitLabel(item.customUnitLabel),
+    pricingMode: normalizePricingMode(item.pricingMode ?? DEFAULT_PRICING_MODE),
+    unitPrice: item.unitPrice,
+  }
 }
 
 export function InvoicePage() {
@@ -89,6 +127,9 @@ export function InvoicePage() {
   const [mobileDraft, setMobileDraft] = useState<MobileItemDraft>({
     name: '',
     quantity: 1,
+    unitCode: DEFAULT_UNIT_CODE,
+    customUnitLabel: '',
+    pricingMode: DEFAULT_PRICING_MODE,
     unitPrice: 0,
   })
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false)
@@ -136,6 +177,8 @@ export function InvoicePage() {
     ],
     [],
   )
+  const unitOptions = useMemo<DropdownOption[]>(() => UNIT_OPTIONS, [])
+  const pricingModeOptions = useMemo<DropdownOption[]>(() => PRICING_MODE_OPTIONS, [])
 
   const canExport = items.length > 0 && totals.total > 0
   const mobileEditingItem = useMemo(
@@ -193,11 +236,7 @@ export function InvoicePage() {
     const nextDrafts = Object.fromEntries(
       items.map((item) => [
         item.id,
-        {
-          name: item.name,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-        },
+        toInvoiceRowDraft(item),
       ]),
     )
     setItemDrafts(nextDrafts)
@@ -222,11 +261,7 @@ export function InvoicePage() {
     setEditingDesktopItemId(itemId)
     setItemDrafts((previous) => ({
       ...previous,
-      [itemId]: {
-        name: item.name,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-      },
+      [itemId]: toInvoiceRowDraft(item),
     }))
   }
 
@@ -239,11 +274,7 @@ export function InvoicePage() {
     if (item) {
       setItemDrafts((previous) => ({
         ...previous,
-        [editingDesktopItemId]: {
-          name: item.name,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-        },
+        [editingDesktopItemId]: toInvoiceRowDraft(item),
       }))
     }
     setEditingDesktopItemId(null)
@@ -258,6 +289,9 @@ export function InvoicePage() {
     updateItem(itemId, {
       name: draft.name,
       quantity: draft.quantity,
+      unitCode: draft.unitCode,
+      customUnitLabel: draft.customUnitLabel,
+      pricingMode: draft.pricingMode,
       unitPrice: draft.unitPrice,
     })
     setEditingDesktopItemId(null)
@@ -276,11 +310,7 @@ export function InvoicePage() {
     }
 
     setMobileEditingItemId(item.id)
-    setMobileDraft({
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-    })
+    setMobileDraft(toInvoiceRowDraft(item))
   }
 
   const closeMobileEditor = () => {
@@ -295,6 +325,9 @@ export function InvoicePage() {
     updateItem(mobileEditingItemId, {
       name: mobileDraft.name,
       quantity: mobileDraft.quantity,
+      unitCode: mobileDraft.unitCode,
+      customUnitLabel: mobileDraft.customUnitLabel,
+      pricingMode: mobileDraft.pricingMode,
       unitPrice: mobileDraft.unitPrice,
     })
     setMobileEditingItemId(null)
@@ -386,7 +419,7 @@ export function InvoicePage() {
                     <thead className="bg-stone-100">
                       <tr className="text-xs font-semibold tracking-[0.08em] text-zinc-500 uppercase">
                         <th className="p-2 text-left">Item</th>
-                        <th className="hidden p-2 text-left md:table-cell">Qty</th>
+                        <th className="hidden p-2 text-left md:table-cell">Amount</th>
                         <th className="hidden p-2 text-left md:table-cell">Unit Price</th>
                         <th className="p-2 text-right">Total</th>
                         <th className="w-24 p-2 text-right">Actions</th>
@@ -394,15 +427,28 @@ export function InvoicePage() {
                     </thead>
                     <tbody>
                       {items.map((item) => {
-                        const draft = itemDrafts[item.id] ?? {
-                          name: item.name,
-                          quantity: item.quantity,
-                          unitPrice: item.unitPrice,
-                        }
+                        const draft = itemDrafts[item.id] ?? toInvoiceRowDraft(item)
                         const isEditingDesktop = editingDesktopItemId === item.id
+                        const normalizedItem = {
+                          ...item,
+                          ...toInvoiceRowDraft(item),
+                        }
                         const lineTotal = isEditingDesktop
-                          ? draft.quantity * draft.unitPrice
-                          : item.quantity * item.unitPrice
+                          ? computeInvoiceLineTotal({ ...normalizedItem, ...draft })
+                          : computeInvoiceLineTotal(normalizedItem)
+                        const amountLabel = isEditingDesktop
+                          ? formatItemAmountLabel(
+                              draft.quantity,
+                              draft.unitCode,
+                              draft.customUnitLabel,
+                              draft.pricingMode,
+                            )
+                          : formatItemAmountLabel(
+                              normalizedItem.quantity,
+                              normalizedItem.unitCode,
+                              normalizedItem.customUnitLabel,
+                              normalizedItem.pricingMode,
+                            )
 
                         return (
                         <tr key={item.id} className="border-t border-stone-200 bg-white">
@@ -410,7 +456,9 @@ export function InvoicePage() {
                             <div className="md:hidden">
                               <p className="truncate text-sm font-semibold text-zinc-800">{item.name}</p>
                               <p className="mt-1 text-xs text-zinc-500">
-                                {item.quantity} x {currency.format(item.unitPrice)}
+                                {normalizedItem.pricingMode === 'flat'
+                                  ? `Flat fee ${currency.format(item.unitPrice)}`
+                                  : `${amountLabel} x ${currency.format(item.unitPrice)}`}
                               </p>
                             </div>
                             <div className="hidden md:block">
@@ -429,27 +477,71 @@ export function InvoicePage() {
                           </td>
                           <td className="hidden p-2 md:table-cell">
                             {isEditingDesktop ? (
-                              <NumberInput
-                                min={0}
-                                value={draft.quantity}
-                                allowDecimal={false}
-                                onValueChange={(quantity) => handleDraftChange(item.id, { quantity })}
-                                aria-label="Quantity"
-                              />
+                              <div className="grid gap-2">
+                                <NumberInput
+                                  min={0}
+                                  value={draft.quantity}
+                                  allowDecimal={isDecimalAllowedForUnit(draft.unitCode)}
+                                  onValueChange={(quantity) => handleDraftChange(item.id, { quantity })}
+                                  aria-label="Amount"
+                                  disabled={draft.pricingMode === 'flat'}
+                                />
+                                <DropdownSelect
+                                  value={draft.unitCode}
+                                  onChange={(nextValue) => {
+                                    const nextUnitCode = normalizeUnitCode(nextValue)
+                                    handleDraftChange(item.id, {
+                                      unitCode: nextUnitCode,
+                                      quantity: sanitizeQuantityForUnit(draft.quantity, nextUnitCode),
+                                      customUnitLabel:
+                                        nextUnitCode === 'custom' ? draft.customUnitLabel : '',
+                                    })
+                                  }}
+                                  options={unitOptions}
+                                />
+                                {draft.unitCode === 'custom' && (
+                                  <Input
+                                    value={draft.customUnitLabel}
+                                    onChange={(event) =>
+                                      handleDraftChange(item.id, { customUnitLabel: event.target.value })
+                                    }
+                                    placeholder="Custom unit"
+                                  />
+                                )}
+                              </div>
                             ) : (
-                              <p className="text-sm text-zinc-700">{item.quantity}</p>
+                              <p className="text-sm text-zinc-700">{amountLabel}</p>
                             )}
                           </td>
                           <td className="hidden p-2 md:table-cell">
                             {isEditingDesktop ? (
-                              <NumberInput
-                                min={0}
-                                value={draft.unitPrice}
-                                onValueChange={(unitPrice) => handleDraftChange(item.id, { unitPrice })}
-                                aria-label="Unit price"
-                              />
+                              <div className="grid gap-2">
+                                <NumberInput
+                                  min={0}
+                                  value={draft.unitPrice}
+                                  onValueChange={(unitPrice) => handleDraftChange(item.id, { unitPrice })}
+                                  aria-label={draft.pricingMode === 'flat' ? 'Flat fee' : 'Unit price'}
+                                />
+                                <DropdownSelect
+                                  value={draft.pricingMode}
+                                  onChange={(nextValue) => {
+                                    const nextPricingMode = normalizePricingMode(nextValue)
+                                    handleDraftChange(item.id, {
+                                      pricingMode: nextPricingMode,
+                                      quantity:
+                                        nextPricingMode === 'flat'
+                                          ? 1
+                                          : sanitizeQuantityForUnit(draft.quantity, draft.unitCode),
+                                    })
+                                  }}
+                                  options={pricingModeOptions}
+                                />
+                              </div>
                             ) : (
-                              <p className="text-sm text-zinc-700">{currency.format(item.unitPrice)}</p>
+                              <p className="text-sm text-zinc-700">
+                                {currency.format(item.unitPrice)}
+                                {normalizedItem.pricingMode === 'flat' ? ' (flat)' : ''}
+                              </p>
                             )}
                           </td>
                           <td className="p-2 text-right align-middle text-sm font-semibold text-zinc-800">
@@ -712,17 +804,70 @@ export function InvoicePage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-semibold text-zinc-600">Quantity</label>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">Amount</label>
           <NumberInput
             min={0}
-            allowDecimal={false}
+            allowDecimal={isDecimalAllowedForUnit(mobileDraft.unitCode)}
             value={mobileDraft.quantity}
             onValueChange={(quantity) => setMobileDraft((prev) => ({ ...prev, quantity }))}
+            disabled={mobileDraft.pricingMode === 'flat'}
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-semibold text-zinc-600">Unit price</label>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">Unit</label>
+          <DropdownSelect
+            value={mobileDraft.unitCode}
+            onChange={(nextValue) =>
+              setMobileDraft((prev) => {
+                const nextUnitCode = normalizeUnitCode(nextValue)
+                return {
+                  ...prev,
+                  unitCode: nextUnitCode,
+                  quantity: sanitizeQuantityForUnit(prev.quantity, nextUnitCode),
+                  customUnitLabel: nextUnitCode === 'custom' ? prev.customUnitLabel : '',
+                }
+              })
+            }
+            options={unitOptions}
+          />
+        </div>
+
+        {mobileDraft.unitCode === 'custom' && (
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-zinc-600">Custom unit label</label>
+            <Input
+              value={mobileDraft.customUnitLabel}
+              onChange={(event) =>
+                setMobileDraft((prev) => ({ ...prev, customUnitLabel: event.target.value }))
+              }
+              placeholder="e.g. bundle"
+            />
+          </div>
+        )}
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">Pricing mode</label>
+          <DropdownSelect
+            value={mobileDraft.pricingMode}
+            onChange={(nextValue) =>
+              setMobileDraft((prev) => {
+                const nextPricingMode = normalizePricingMode(nextValue)
+                return {
+                  ...prev,
+                  pricingMode: nextPricingMode,
+                  quantity: nextPricingMode === 'flat' ? 1 : prev.quantity,
+                }
+              })
+            }
+            options={pricingModeOptions}
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">
+            {mobileDraft.pricingMode === 'flat' ? 'Flat fee' : 'Unit price'}
+          </label>
           <NumberInput
             min={0}
             value={mobileDraft.unitPrice}

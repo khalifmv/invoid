@@ -9,7 +9,17 @@ import { Input } from '../components/ui/Input'
 import { NumberInput } from '../components/ui/NumberInput'
 import { useIsDesktop } from '../hooks/useIsDesktop'
 import { createCurrencyFormatter } from '../lib/currency'
-import type { Product } from '../types'
+import {
+  DEFAULT_PRICING_MODE,
+  DEFAULT_UNIT_CODE,
+  formatItemAmountLabel,
+  normalizeCustomUnitLabel,
+  normalizePricingMode,
+  normalizeUnitCode,
+  PRICING_MODE_OPTIONS,
+  UNIT_OPTIONS,
+} from '../lib/item-semantics'
+import type { PricingMode, Product, UnitCode } from '../types'
 import { useCatalogStore } from '../store/catalogStore'
 import { useSettingsStore } from '../store/settingsStore'
 
@@ -19,12 +29,18 @@ interface ProductDraft {
   name: string
   defaultPrice: number
   categoryId: string
+  defaultUnitCode: UnitCode
+  defaultCustomUnitLabel: string
+  defaultPricingMode: PricingMode
 }
 
 const toDraft = (product: Product): ProductDraft => ({
   name: product.name,
   defaultPrice: product.defaultPrice,
   categoryId: product.categoryId ?? '',
+  defaultUnitCode: normalizeUnitCode(product.defaultUnitCode ?? DEFAULT_UNIT_CODE),
+  defaultCustomUnitLabel: normalizeCustomUnitLabel(product.defaultCustomUnitLabel),
+  defaultPricingMode: normalizePricingMode(product.defaultPricingMode ?? DEFAULT_PRICING_MODE),
 })
 
 export function CatalogPage() {
@@ -46,6 +62,9 @@ export function CatalogPage() {
   const [newProductName, setNewProductName] = useState('')
   const [newProductPrice, setNewProductPrice] = useState(0)
   const [newProductCategoryId, setNewProductCategoryId] = useState('')
+  const [newProductUnitCode, setNewProductUnitCode] = useState<UnitCode>(DEFAULT_UNIT_CODE)
+  const [newProductCustomUnitLabel, setNewProductCustomUnitLabel] = useState('')
+  const [newProductPricingMode, setNewProductPricingMode] = useState<PricingMode>(DEFAULT_PRICING_MODE)
   const [productDrafts, setProductDrafts] = useState<Record<string, ProductDraft>>({})
   const [editingDesktopProductId, setEditingDesktopProductId] = useState<string | null>(null)
   const [mobileEditingProductId, setMobileEditingProductId] = useState<string | null>(null)
@@ -53,6 +72,9 @@ export function CatalogPage() {
     name: '',
     defaultPrice: 0,
     categoryId: '',
+    defaultUnitCode: DEFAULT_UNIT_CODE,
+    defaultCustomUnitLabel: '',
+    defaultPricingMode: DEFAULT_PRICING_MODE,
   })
   const [savingProductId, setSavingProductId] = useState<string | null>(null)
 
@@ -70,6 +92,8 @@ export function CatalogPage() {
     ],
     [categories],
   )
+  const unitOptions = useMemo<DropdownOption[]>(() => UNIT_OPTIONS, [])
+  const pricingModeOptions = useMemo<DropdownOption[]>(() => PRICING_MODE_OPTIONS, [])
 
   const currency = useMemo(() => createCurrencyFormatter(currencyCode), [currencyCode])
   const mobileEditingProduct = useMemo(
@@ -90,10 +114,20 @@ export function CatalogPage() {
 
   const handleCreateProduct = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    await createProduct(newProductName, newProductPrice, newProductCategoryId || null)
+    await createProduct(
+      newProductName,
+      newProductPrice,
+      newProductCategoryId || null,
+      newProductUnitCode,
+      newProductCustomUnitLabel,
+      newProductPricingMode,
+    )
     setNewProductName('')
     setNewProductPrice(0)
     setNewProductCategoryId('')
+    setNewProductUnitCode(DEFAULT_UNIT_CODE)
+    setNewProductCustomUnitLabel('')
+    setNewProductPricingMode(DEFAULT_PRICING_MODE)
   }
 
   const handleDraftChange = (productId: string, patch: Partial<ProductDraft>) => {
@@ -143,7 +177,15 @@ export function CatalogPage() {
     setSavingProductId(productId)
 
     try {
-      await updateProduct(productId, draft.name, draft.defaultPrice, draft.categoryId || null)
+      await updateProduct(
+        productId,
+        draft.name,
+        draft.defaultPrice,
+        draft.categoryId || null,
+        draft.defaultUnitCode,
+        draft.defaultCustomUnitLabel,
+        draft.defaultPricingMode,
+      )
       setEditingDesktopProductId(null)
     } finally {
       setSavingProductId(null)
@@ -177,6 +219,9 @@ export function CatalogPage() {
         mobileDraft.name,
         mobileDraft.defaultPrice,
         mobileDraft.categoryId || null,
+        mobileDraft.defaultUnitCode,
+        mobileDraft.defaultCustomUnitLabel,
+        mobileDraft.defaultPricingMode,
       )
       setMobileEditingProductId(null)
     } finally {
@@ -237,6 +282,34 @@ export function CatalogPage() {
                   />
                   <Button type="submit">Save</Button>
                 </div>
+
+                <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1.5fr]">
+                  <DropdownSelect
+                    value={newProductUnitCode}
+                    onChange={(nextValue) => {
+                      const nextUnitCode = normalizeUnitCode(nextValue)
+                      setNewProductUnitCode(nextUnitCode)
+                      if (nextUnitCode !== 'custom') {
+                        setNewProductCustomUnitLabel('')
+                      }
+                    }}
+                    options={unitOptions}
+                  />
+                  <DropdownSelect
+                    value={newProductPricingMode}
+                    onChange={(nextValue) => setNewProductPricingMode(normalizePricingMode(nextValue))}
+                    options={pricingModeOptions}
+                  />
+                  {newProductUnitCode === 'custom' ? (
+                    <Input
+                      value={newProductCustomUnitLabel}
+                      onChange={(event) => setNewProductCustomUnitLabel(event.target.value)}
+                      placeholder="Custom unit label (e.g. pack)"
+                    />
+                  ) : (
+                    <Input value={formatItemAmountLabel(1, newProductUnitCode, '', newProductPricingMode)} disabled />
+                  )}
+                </div>
               </form>
 
               {isLoading && <p className="text-sm text-zinc-400">Loading...</p>}
@@ -264,6 +337,12 @@ export function CatalogPage() {
                           const categoryLabel = product.categoryId
                             ? (categoryNamesById.get(product.categoryId) ?? 'Uncategorized')
                             : 'Uncategorized'
+                          const billingLabel = formatItemAmountLabel(
+                            1,
+                            normalizeUnitCode(product.defaultUnitCode ?? DEFAULT_UNIT_CODE),
+                            normalizeCustomUnitLabel(product.defaultCustomUnitLabel),
+                            normalizePricingMode(product.defaultPricingMode ?? DEFAULT_PRICING_MODE),
+                          )
 
                           return (
                             <tr key={product.id} className="border-t border-stone-200 bg-white">
@@ -271,6 +350,7 @@ export function CatalogPage() {
                                 <div className="md:hidden">
                                   <p className="truncate text-sm font-semibold text-zinc-800">{product.name}</p>
                                   <p className="mt-1 text-xs text-zinc-500">{categoryLabel}</p>
+                                  <p className="mt-1 text-xs text-zinc-500">{billingLabel}</p>
                                 </div>
                                 <div className="hidden md:block">
                                   {isEditingDesktop ? (
@@ -281,18 +361,46 @@ export function CatalogPage() {
                                       }
                                     />
                                   ) : (
-                                    <p className="text-sm font-semibold text-zinc-800">{product.name}</p>
+                                    <>
+                                      <p className="text-sm font-semibold text-zinc-800">{product.name}</p>
+                                      <p className="mt-1 text-xs text-zinc-500">{billingLabel}</p>
+                                    </>
                                   )}
                                 </div>
                               </td>
 
                               <td className="hidden p-2 align-middle md:table-cell">
                                 {isEditingDesktop ? (
-                                  <DropdownSelect
-                                    value={draft.categoryId}
-                                    onChange={(categoryId) => handleDraftChange(product.id, { categoryId })}
-                                    options={categoryOptions}
-                                  />
+                                  <div className="grid gap-2">
+                                    <DropdownSelect
+                                      value={draft.categoryId}
+                                      onChange={(categoryId) => handleDraftChange(product.id, { categoryId })}
+                                      options={categoryOptions}
+                                    />
+                                    <DropdownSelect
+                                      value={draft.defaultUnitCode}
+                                      onChange={(nextValue) => {
+                                        const nextUnitCode = normalizeUnitCode(nextValue)
+                                        handleDraftChange(product.id, {
+                                          defaultUnitCode: nextUnitCode,
+                                          defaultCustomUnitLabel:
+                                            nextUnitCode === 'custom' ? draft.defaultCustomUnitLabel : '',
+                                        })
+                                      }}
+                                      options={unitOptions}
+                                    />
+                                    {draft.defaultUnitCode === 'custom' && (
+                                      <Input
+                                        value={draft.defaultCustomUnitLabel}
+                                        onChange={(event) =>
+                                          handleDraftChange(product.id, {
+                                            defaultCustomUnitLabel: event.target.value,
+                                          })
+                                        }
+                                        placeholder="Custom unit"
+                                      />
+                                    )}
+                                  </div>
                                 ) : (
                                   <p className="text-sm text-zinc-600">{categoryLabel}</p>
                                 )}
@@ -301,13 +409,24 @@ export function CatalogPage() {
                               <td className="p-2 text-right align-middle text-sm font-semibold text-zinc-800">
                                 {isEditingDesktop ? (
                                   <div className="hidden md:block">
-                                    <NumberInput
-                                      min={0}
-                                      value={draft.defaultPrice}
-                                      onValueChange={(defaultPrice) =>
-                                        handleDraftChange(product.id, { defaultPrice })
-                                      }
-                                    />
+                                    <div className="grid gap-2">
+                                      <NumberInput
+                                        min={0}
+                                        value={draft.defaultPrice}
+                                        onValueChange={(defaultPrice) =>
+                                          handleDraftChange(product.id, { defaultPrice })
+                                        }
+                                      />
+                                      <DropdownSelect
+                                        value={draft.defaultPricingMode}
+                                        onChange={(nextValue) =>
+                                          handleDraftChange(product.id, {
+                                            defaultPricingMode: normalizePricingMode(nextValue),
+                                          })
+                                        }
+                                        options={pricingModeOptions}
+                                      />
+                                    </div>
                                   </div>
                                 ) : null}
                                 <p className={isEditingDesktop ? 'md:hidden' : ''}>
@@ -455,6 +574,51 @@ export function CatalogPage() {
             min={0}
             value={mobileDraft.defaultPrice}
             onValueChange={(defaultPrice) => setMobileDraft((prev) => ({ ...prev, defaultPrice }))}
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">Unit</label>
+          <DropdownSelect
+            value={mobileDraft.defaultUnitCode}
+            onChange={(nextValue) =>
+              setMobileDraft((prev) => {
+                const nextUnitCode = normalizeUnitCode(nextValue)
+                return {
+                  ...prev,
+                  defaultUnitCode: nextUnitCode,
+                  defaultCustomUnitLabel: nextUnitCode === 'custom' ? prev.defaultCustomUnitLabel : '',
+                }
+              })
+            }
+            options={unitOptions}
+          />
+        </div>
+
+        {mobileDraft.defaultUnitCode === 'custom' && (
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-zinc-600">Custom unit label</label>
+            <Input
+              value={mobileDraft.defaultCustomUnitLabel}
+              onChange={(event) =>
+                setMobileDraft((prev) => ({ ...prev, defaultCustomUnitLabel: event.target.value }))
+              }
+              placeholder="e.g. tray"
+            />
+          </div>
+        )}
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">Pricing mode</label>
+          <DropdownSelect
+            value={mobileDraft.defaultPricingMode}
+            onChange={(nextValue) =>
+              setMobileDraft((prev) => ({
+                ...prev,
+                defaultPricingMode: normalizePricingMode(nextValue),
+              }))
+            }
+            options={pricingModeOptions}
           />
         </div>
       </Dialog>

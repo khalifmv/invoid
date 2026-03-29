@@ -3,6 +3,14 @@ import { db } from '../lib/db'
 import { nowIso } from '../lib/date'
 import { computeInvoiceTotals } from '../lib/invoice-calculations'
 import { generateId } from '../lib/ids'
+import {
+  DEFAULT_PRICING_MODE,
+  DEFAULT_UNIT_CODE,
+  normalizeCustomUnitLabel,
+  normalizePricingMode,
+  normalizeUnitCode,
+  sanitizeQuantityForUnit,
+} from '../lib/item-semantics'
 import type {
   BankTransferPayment,
   Customer,
@@ -37,7 +45,9 @@ interface InvoiceActions {
   addManualItem: () => void
   updateItem: (
     itemId: string,
-    patch: Partial<Pick<InvoiceItem, 'name' | 'quantity' | 'unitPrice'>>,
+    patch: Partial<
+      Pick<InvoiceItem, 'name' | 'quantity' | 'unitPrice' | 'unitCode' | 'customUnitLabel' | 'pricingMode'>
+    >,
   ) => void
   removeItem: (itemId: string) => void
   setPaymentMethod: (method: PaymentMethod) => void
@@ -62,6 +72,20 @@ type StoredInvoice = Invoice & {
   customerId?: string | null
   customerSnapshot?: CustomerSnapshot | null
   payment?: Payment
+}
+
+const normalizeInvoiceItem = (item: InvoiceItem): InvoiceItem => {
+  const unitCode = normalizeUnitCode(item.unitCode)
+  const customUnitLabel = normalizeCustomUnitLabel(item.customUnitLabel)
+  const pricingMode = normalizePricingMode(item.pricingMode)
+
+  return {
+    ...item,
+    quantity: sanitizeQuantityForUnit(item.quantity, unitCode),
+    unitCode,
+    customUnitLabel,
+    pricingMode,
+  }
 }
 
 const sanitizeTaxRate = (value: number): number => {
@@ -150,6 +174,7 @@ const sanitizePayment = (payment: Payment): Payment => {
 const normalizeStoredInvoice = (invoice: StoredInvoice): Invoice => {
   return {
     ...invoice,
+    items: invoice.items.map((item) => normalizeInvoiceItem(item)),
     customerId: invoice.customerId ?? null,
     customerSnapshot: invoice.customerSnapshot ?? null,
     payment: invoice.payment ? sanitizePayment(invoice.payment) : createDefaultPayment(),
@@ -196,6 +221,9 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
           productId: product.id,
           name: product.name,
           quantity: 1,
+          unitCode: normalizeUnitCode(product.defaultUnitCode ?? DEFAULT_UNIT_CODE),
+          customUnitLabel: normalizeCustomUnitLabel(product.defaultCustomUnitLabel),
+          pricingMode: normalizePricingMode(product.defaultPricingMode ?? DEFAULT_PRICING_MODE),
           unitPrice: product.defaultPrice,
         },
       ],
@@ -210,22 +238,30 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
           productId: null,
           name: 'Custom item',
           quantity: 1,
+          unitCode: DEFAULT_UNIT_CODE,
+          customUnitLabel: '',
+          pricingMode: DEFAULT_PRICING_MODE,
           unitPrice: 0,
         },
       ],
     })),
 
-  updateItem: (itemId, patch) =>
+  updateItem: (itemId, patch) => {
     set((state) => ({
-      items: state.items.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              ...patch,
-            }
-          : item,
-      ),
-    })),
+      items: state.items.map((item) => {
+        if (item.id !== itemId) {
+          return item
+        }
+
+        const mergedItem: InvoiceItem = {
+          ...item,
+          ...patch,
+        }
+
+        return normalizeInvoiceItem(mergedItem)
+      }),
+    }))
+  },
 
   removeItem: (itemId) =>
     set((state) => ({
@@ -343,7 +379,7 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
       id: generateId(),
       createdAt: timestamp,
       updatedAt: timestamp,
-      items: state.items.map((item) => ({ ...item })),
+      items: state.items.map((item) => normalizeInvoiceItem(item)),
       customerId: state.customerId,
       customerSnapshot: resolvedCustomerSnapshot,
       payment: sanitizePayment(state.payment),

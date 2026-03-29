@@ -1,4 +1,5 @@
 import type { DiscountType, InvoiceItem, InvoiceTotals } from '../types'
+import { normalizePricingMode } from './item-semantics'
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max)
@@ -13,13 +14,22 @@ const sanitizeNumber = (value: number): number => {
 
 const round2 = (value: number): number => Math.round(value * 100) / 100
 
+export const computeInvoiceLineTotal = (item: InvoiceItem): number => {
+  const normalizedPricingMode = normalizePricingMode(item.pricingMode)
+  const unitPrice = Math.max(0, sanitizeNumber(item.unitPrice))
+
+  if (normalizedPricingMode === 'flat') {
+    return round2(unitPrice)
+  }
+
+  const quantity = Math.max(0, sanitizeNumber(item.quantity))
+  return round2(quantity * unitPrice)
+}
+
 export const computeSubtotal = (items: InvoiceItem[]): number => {
   return round2(
     items.reduce((accumulator, item) => {
-      const quantity = sanitizeNumber(item.quantity)
-      const unitPrice = sanitizeNumber(item.unitPrice)
-
-      return accumulator + quantity * unitPrice
+      return accumulator + computeInvoiceLineTotal(item)
     }, 0),
   )
 }

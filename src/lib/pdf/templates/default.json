@@ -69,8 +69,8 @@
       "rowHeight": 22,
       "columns": [
         { "key": "name", "label": "Item", "width": 245, "align": "left" },
-        { "key": "qty", "label": "Qty", "width": 60, "align": "right" },
-        { "key": "price", "label": "Price", "width": 100, "align": "right" },
+        { "key": "qty", "label": "Amount", "width": 100, "align": "right" },
+        { "key": "price", "label": "Rate/Fee", "width": 80, "align": "right" },
         { "key": "total", "label": "Total", "width": 110, "align": "right" }
       ],
       "data": "{{items}}"

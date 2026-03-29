@@ -1,5 +1,6 @@
 import { Check, ChevronDown } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '../../lib/cn'
 
 export interface DropdownOption {
@@ -30,23 +31,61 @@ export function DropdownSelect({
 }: DropdownSelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const panelRef = useRef<HTMLUListElement | null>(null)
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({})
   const selectedOption = useMemo(
     () => options.find((option) => option.value === value) ?? null,
     [options, value],
   )
+
+  const updatePanelPosition = () => {
+    const trigger = triggerRef.current
+    if (!trigger) {
+      return
+    }
+
+    const rect = trigger.getBoundingClientRect()
+    const viewportHeight = window.innerHeight
+    const viewportWidth = window.innerWidth
+    const gutter = 8
+    const maxPanelWidth = Math.max(220, rect.width)
+
+    const spaceBelow = viewportHeight - rect.bottom - gutter
+    const spaceAbove = rect.top - gutter
+    const shouldOpenUp = spaceBelow < 180 && spaceAbove > spaceBelow
+    const availableHeight = shouldOpenUp ? spaceAbove : spaceBelow
+    const maxHeight = Math.max(120, Math.min(240, availableHeight - 4))
+
+    const left = Math.max(gutter, Math.min(rect.left, viewportWidth - maxPanelWidth - gutter))
+    const top = shouldOpenUp ? Math.max(gutter, rect.top - maxHeight - 4) : rect.bottom + 4
+
+    setPanelStyle({
+      position: 'fixed',
+      left,
+      top,
+      width: rect.width,
+      maxHeight,
+    })
+  }
 
   useEffect(() => {
     if (!isOpen) {
       return
     }
 
+    updatePanelPosition()
+
     const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current) {
+      if (!rootRef.current || !panelRef.current) {
         return
       }
 
       const target = event.target as Node
-      if (!rootRef.current.contains(target)) {
+      const isInsideTrigger = rootRef.current.contains(target)
+      const isInsidePanel = panelRef.current.contains(target)
+
+      if (!isInsideTrigger && !isInsidePanel) {
         setIsOpen(false)
       }
     }
@@ -57,18 +96,66 @@ export function DropdownSelect({
       }
     }
 
+    const handleViewportChange = () => {
+      updatePanelPosition()
+    }
+
     window.addEventListener('pointerdown', handlePointerDown)
     window.addEventListener('keydown', handleEscape)
+    window.addEventListener('resize', handleViewportChange)
+    window.addEventListener('scroll', handleViewportChange, true)
 
     return () => {
       window.removeEventListener('pointerdown', handlePointerDown)
       window.removeEventListener('keydown', handleEscape)
+      window.removeEventListener('resize', handleViewportChange)
+      window.removeEventListener('scroll', handleViewportChange, true)
     }
   }, [isOpen])
+
+  const dropdownPanel =
+    isOpen && !disabled
+      ? createPortal(
+          <ul
+            ref={panelRef}
+            role="listbox"
+            aria-labelledby={id}
+            style={panelStyle}
+            className="z-[1000] overflow-auto rounded-lg border border-zinc-200 bg-white p-1 shadow-xl"
+          >
+            {options.map((option) => {
+              const isSelected = option.value === value
+
+              return (
+                <li key={option.value} role="option" aria-selected={isSelected}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(option.value)
+                      setIsOpen(false)
+                    }}
+                    className={cn(
+                      'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm',
+                      isSelected
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'text-zinc-800 hover:bg-zinc-100',
+                    )}
+                  >
+                    <span className="truncate">{option.label}</span>
+                    {isSelected && <Check className="h-4 w-4" />}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>,
+          document.body,
+        )
+      : null
 
   return (
     <div className={cn('relative', className)} ref={rootRef}>
       <button
+        ref={triggerRef}
         id={id}
         type="button"
         disabled={disabled}
@@ -83,39 +170,7 @@ export function DropdownSelect({
         </span>
         <ChevronDown className={cn('h-4 w-4 text-zinc-500 transition-transform', isOpen && 'rotate-180')} />
       </button>
-
-      {isOpen && !disabled && (
-        <ul
-          role="listbox"
-          aria-labelledby={id}
-          className="absolute z-40 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-zinc-200 bg-white p-1 shadow-xl"
-        >
-          {options.map((option) => {
-            const isSelected = option.value === value
-
-            return (
-              <li key={option.value} role="option" aria-selected={isSelected}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onChange(option.value)
-                    setIsOpen(false)
-                  }}
-                  className={cn(
-                    'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm',
-                    isSelected
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-zinc-800 hover:bg-zinc-100',
-                  )}
-                >
-                  <span className="truncate">{option.label}</span>
-                  {isSelected && <Check className="h-4 w-4" />}
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+      {dropdownPanel}
     </div>
   )
 }

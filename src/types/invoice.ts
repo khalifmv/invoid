@@ -3,6 +3,8 @@ import type { CustomerSnapshot } from './customer'
 
 export type DiscountType = 'percentage' | 'fixed'
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'e_wallet' | 'other'
+export type UnitCode = 'pcs' | 'kg' | 'g' | 'l' | 'ml' | 'hour' | 'day' | 'session' | 'service' | 'custom'
+export type PricingMode = 'per_unit' | 'flat'
 
 export interface CashPayment {
   method: 'cash'
@@ -34,6 +36,9 @@ export interface InvoiceItem {
   productId: EntityId | null
   name: string
   quantity: number
+  unitCode?: UnitCode
+  customUnitLabel?: string
+  pricingMode?: PricingMode
   unitPrice: number
 }
 

@@ -24,7 +24,6 @@ and installable PWA behavior with offline fallback.
 - Invoice builder with editable line items (catalog-based and manual)
 - Discount and tax controls with real-time total calculation
 - Customer management and customer snapshot on saved invoices
-- Payment methods: cash, bank transfer, e-wallet, and other
 - Invoice history and detail page
 - Template-driven PDF export and print (including uploaded business logo)
 - Multi-page PDF item table rendering

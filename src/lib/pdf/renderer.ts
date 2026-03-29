@@ -1,6 +1,16 @@
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 import type { CurrencyCode, Invoice, PaymentMethod } from '../../types'
-import { computeCashChange } from '../invoice-calculations'
+import { computeCashChange, computeInvoiceLineTotal } from '../invoice-calculations'
+import {
+  DEFAULT_PRICING_MODE,
+  DEFAULT_UNIT_CODE,
+  formatItemAmountLabel,
+  formatItemRateLabel,
+  normalizeCustomUnitLabel,
+  normalizePricingMode,
+  normalizeUnitCode,
+  sanitizeQuantityForUnit,
+} from '../item-semantics'
 import { bindTemplateData } from './bindings'
 import { parseTemplateColor, renderLogoBlock, renderTemplateBlock } from './blocks'
 import type { PdfSummaryBlock, PdfTableBlock, PdfTemplate } from './template'
@@ -60,12 +70,23 @@ const createRenderModel = (
     dateStyle: 'medium',
   })
 
-  const items = invoice.items.map((item) => ({
-    name: item.name,
-    qty: String(item.quantity),
-    price: currency.format(item.unitPrice),
-    total: currency.format(item.quantity * item.unitPrice),
-  }))
+  const items = invoice.items.map((item) => {
+    const unitCode = normalizeUnitCode(item.unitCode ?? DEFAULT_UNIT_CODE)
+    const customUnitLabel = normalizeCustomUnitLabel(item.customUnitLabel)
+    const pricingMode = normalizePricingMode(item.pricingMode ?? DEFAULT_PRICING_MODE)
+
+    return {
+      name: item.name,
+      qty: formatItemAmountLabel(
+        sanitizeQuantityForUnit(item.quantity, unitCode),
+        unitCode,
+        customUnitLabel,
+        pricingMode,
+      ),
+      price: formatItemRateLabel(currency.format(item.unitPrice), unitCode, customUnitLabel, pricingMode),
+      total: currency.format(computeInvoiceLineTotal(item)),
+    }
+  })
 
   const paymentAmountPaid = invoice.payment.method === 'cash' ? currency.format(invoice.payment.amountPaid) : ''
   const paymentChange =

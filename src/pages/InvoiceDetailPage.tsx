@@ -4,7 +4,17 @@ import { Link, useParams } from 'react-router'
 import { Button } from '../components/ui/Button'
 import { Card, CardTitle } from '../components/ui/Card'
 import { createCurrencyFormatter } from '../lib/currency'
-import { computeCashChange } from '../lib/invoice-calculations'
+import { computeCashChange, computeInvoiceLineTotal } from '../lib/invoice-calculations'
+import {
+  DEFAULT_PRICING_MODE,
+  DEFAULT_UNIT_CODE,
+  formatItemAmountLabel,
+  formatItemRateLabel,
+  normalizeCustomUnitLabel,
+  normalizePricingMode,
+  normalizeUnitCode,
+  sanitizeQuantityForUnit,
+} from '../lib/item-semantics'
 import type { Invoice, PaymentMethod } from '../types'
 import { useInvoiceStore } from '../store/invoiceStore'
 import { useSettingsStore } from '../store/settingsStore'
@@ -220,24 +230,37 @@ export function InvoiceDetailPage() {
             <thead className="bg-stone-100">
               <tr className="text-xs font-semibold tracking-[0.08em] text-zinc-500 uppercase">
                 <th className="p-2 text-left">Item</th>
-                <th className="p-2 text-right">Qty</th>
-                <th className="hidden p-2 text-right sm:table-cell">Unit Price</th>
+                <th className="p-2 text-right">Amount</th>
+                <th className="hidden p-2 text-right sm:table-cell">Rate / Fee</th>
                 <th className="p-2 text-right">Total</th>
               </tr>
             </thead>
             <tbody>
-              {invoice.items.map((item) => (
-                <tr key={item.id} className="border-t border-stone-200 bg-white">
-                  <td className="p-2 text-sm font-semibold text-zinc-800">{item.name}</td>
-                  <td className="p-2 text-right text-sm text-zinc-700">{item.quantity}</td>
-                  <td className="hidden p-2 text-right text-sm text-zinc-700 sm:table-cell">
-                    {currency.format(item.unitPrice)}
-                  </td>
-                  <td className="p-2 text-right text-sm font-semibold text-zinc-900">
-                    {currency.format(item.quantity * item.unitPrice)}
-                  </td>
-                </tr>
-              ))}
+              {invoice.items.map((item) => {
+                const unitCode = normalizeUnitCode(item.unitCode ?? DEFAULT_UNIT_CODE)
+                const customUnitLabel = normalizeCustomUnitLabel(item.customUnitLabel)
+                const pricingMode = normalizePricingMode(item.pricingMode ?? DEFAULT_PRICING_MODE)
+
+                return (
+                  <tr key={item.id} className="border-t border-stone-200 bg-white">
+                    <td className="p-2 text-sm font-semibold text-zinc-800">{item.name}</td>
+                    <td className="p-2 text-right text-sm text-zinc-700">
+                      {formatItemAmountLabel(
+                        sanitizeQuantityForUnit(item.quantity, unitCode),
+                        unitCode,
+                        customUnitLabel,
+                        pricingMode,
+                      )}
+                    </td>
+                    <td className="hidden p-2 text-right text-sm text-zinc-700 sm:table-cell">
+                      {formatItemRateLabel(currency.format(item.unitPrice), unitCode, customUnitLabel, pricingMode)}
+                    </td>
+                    <td className="p-2 text-right text-sm font-semibold text-zinc-900">
+                      {currency.format(computeInvoiceLineTotal(item))}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

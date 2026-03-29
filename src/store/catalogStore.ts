@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { db } from '../lib/db'
 import { nowIso } from '../lib/date'
 import { generateId } from '../lib/ids'
-import type { Category, Product } from '../types'
+import { DEFAULT_PRICING_MODE, DEFAULT_UNIT_CODE, normalizePricingMode, normalizeUnitCode } from '../lib/item-semantics'
+import type { Category, PricingMode, Product, UnitCode } from '../types'
 
 interface CatalogState {
   categories: Category[]
@@ -14,12 +15,22 @@ interface CatalogState {
 interface CatalogActions {
   hydrate: () => Promise<void>
   createCategory: (name: string) => Promise<void>
-  createProduct: (name: string, defaultPrice: number, categoryId: string | null) => Promise<void>
+  createProduct: (
+    name: string,
+    defaultPrice: number,
+    categoryId: string | null,
+    defaultUnitCode?: UnitCode,
+    defaultCustomUnitLabel?: string,
+    defaultPricingMode?: PricingMode,
+  ) => Promise<void>
   updateProduct: (
     productId: string,
     name: string,
     defaultPrice: number,
     categoryId: string | null,
+    defaultUnitCode?: UnitCode,
+    defaultCustomUnitLabel?: string,
+    defaultPricingMode?: PricingMode,
   ) => Promise<void>
   deleteProduct: (productId: string) => Promise<void>
 }
@@ -76,7 +87,14 @@ export const useCatalogStore = create<CatalogStore>((set, get) => ({
     await get().hydrate()
   },
 
-  createProduct: async (name, defaultPrice, categoryId) => {
+  createProduct: async (
+    name,
+    defaultPrice,
+    categoryId,
+    defaultUnitCode = DEFAULT_UNIT_CODE,
+    defaultCustomUnitLabel = '',
+    defaultPricingMode = DEFAULT_PRICING_MODE,
+  ) => {
     const normalizedName = name.trim()
     if (normalizedName.length === 0) {
       return
@@ -90,6 +108,9 @@ export const useCatalogStore = create<CatalogStore>((set, get) => ({
       name: normalizedName,
       categoryId,
       defaultPrice: normalizedPrice,
+      defaultUnitCode: normalizeUnitCode(defaultUnitCode),
+      defaultCustomUnitLabel: defaultCustomUnitLabel.trim(),
+      defaultPricingMode: normalizePricingMode(defaultPricingMode),
       createdAt: timestamp,
       updatedAt: timestamp,
     }
@@ -98,7 +119,15 @@ export const useCatalogStore = create<CatalogStore>((set, get) => ({
     await get().hydrate()
   },
 
-  updateProduct: async (productId, name, defaultPrice, categoryId) => {
+  updateProduct: async (
+    productId,
+    name,
+    defaultPrice,
+    categoryId,
+    defaultUnitCode,
+    defaultCustomUnitLabel,
+    defaultPricingMode,
+  ) => {
     const normalizedName = name.trim()
     if (normalizedName.length === 0) {
       return
@@ -116,6 +145,11 @@ export const useCatalogStore = create<CatalogStore>((set, get) => ({
       name: normalizedName,
       defaultPrice: normalizedPrice,
       categoryId,
+      defaultUnitCode: normalizeUnitCode(defaultUnitCode ?? existing.defaultUnitCode ?? DEFAULT_UNIT_CODE),
+      defaultCustomUnitLabel: (defaultCustomUnitLabel ?? existing.defaultCustomUnitLabel ?? '').trim(),
+      defaultPricingMode: normalizePricingMode(
+        defaultPricingMode ?? existing.defaultPricingMode ?? DEFAULT_PRICING_MODE,
+      ),
       updatedAt: nowIso(),
     }
 
