@@ -2,31 +2,34 @@
   <img src="src/assets/invoid.svg" alt="Invoid" height="72" />
 </p>
 
-<h1 align="center"></h1>
-
 <p align="center">
-  An open-source invoice generator for everyone and small businesses.
-  <br />
+  Open-source invoice generator for individuals and small businesses.
 </p>
 
 ---
 
 ## Overview
 
-Invoid is a browser-based invoicing tool designed to let you create a professional invoice in seconds. All data is stored locally in your browser using IndexedDB, nothing is sent to a server. The application is built as a single-page application and is designed to eventually be installable as a Progressive Web App (PWA).
+Invoid is a browser-based invoicing app that runs fully on the client side.
+All business data (catalog, customers, invoices) is stored locally in IndexedDB,
+and app preferences are stored in localStorage.
 
-The core workflow is straightforward: maintain a catalog of your products and categories, build an invoice by selecting items from that catalog (or entering them manually), apply a discount and tax, then export. Every saved invoice is retained in local history for reference.
+It supports invoice creation, customer management, payment tracking, template-based PDF generation,
+and installable PWA behavior with offline fallback.
 
 ---
 
-## Features
+## Current Features
 
-- **Invoice builder** — Add line items from your product catalog or enter them manually. Each item has an editable description, quantity, and unit price with a computed line total.
-- **Discount and tax** — Apply a pre-tax discount as either a percentage or a fixed amount. Toggle tax on or off with a configurable rate. All totals are computed in real time.
-- **Product catalog** — Manage a reusable library of products and categories. Products pre-fill name and price when added to an invoice.
-- **Invoice history** — Every exported invoice is persisted to IndexedDB and viewable in a chronological history log.
-- **Business settings** — Configure your business name, logo, default currency (USD or IDR), and default tax settings. Settings survive page reloads via `localStorage`.
-- **Fully offline** — No network requests at runtime. All persistence is handled by the browser.
+- Invoice builder with editable line items (catalog-based and manual)
+- Discount and tax controls with real-time total calculation
+- Customer management and customer snapshot on saved invoices
+- Payment methods: cash, bank transfer, e-wallet, and other
+- Invoice history and detail page
+- Template-driven PDF export and print (including uploaded business logo)
+- Multi-page PDF item table rendering
+- Installable PWA with service worker caching and offline navigation fallback
+- New-version update prompt when a new service worker is available
 
 ---
 
@@ -36,54 +39,73 @@ The core workflow is straightforward: maintain a catalog of your products and ca
 |---|---|
 | Framework | React 19 |
 | Language | TypeScript 5 |
-| Build tool | Vite 8 |
+| Build Tool | Vite 8 |
 | Styling | Tailwind CSS v4 |
-| State management | Zustand 5 |
-| Local database | Dexie (IndexedDB) 4 |
 | Routing | React Router 7 |
+| State Management | Zustand 5 |
+| Local Database | Dexie 4 (IndexedDB) |
+| PDF Engine | pdf-lib |
 | Icons | Lucide React |
 
 ---
 
-## Project Structure
-
-```
-src/
-  assets/           Static assets (logo SVG)
-  components/
-    nav/            AppNav — responsive sidebar / bottom bar
-    ui/             Primitive UI components (Button, Card, Input, Toggle, etc.)
-  layouts/          AppLayout — root shell with nav and header
-  lib/              Pure utilities (db, currency formatting, ID generation, invoice math)
-  pages/            Route-level page components
-  store/            Zustand stores (invoice, catalog, settings)
-  types/            Shared TypeScript type definitions
-```
-
-### Pages
+## Routes
 
 | Route | Page | Description |
 |---|---|---|
-| `/` | Invoice | Build and export an invoice |
-| `/catalog` | Catalog | Manage products and categories |
-| `/history` | History | View previously exported invoices |
-| `/settings` | Settings | Configure business name, logo, currency, and tax defaults |
+| / | Invoice | Build invoice and export PDF |
+| /catalog | Catalog | Manage categories and products |
+| /customers | Customers | Manage customer records |
+| /history | History | View saved invoices |
+| /history/:invoiceId | Invoice Detail | View invoice detail and print PDF |
+| /settings | Settings | Business profile, logo, currency, tax defaults |
+
+---
+
+## PDF Template System
+
+Invoid uses a JSON template + renderer pipeline for invoice PDFs.
+
+- Template blocks: logo, header, customer, payment, table, summary
+- Dynamic bindings using placeholders such as {{invoice.id}} and {{business.name}}
+- Right/left alignment control per table column
+- Automatic table pagination for long invoices
+- Download and print workflows using the same PDF render output
+
+Default template location:
+
+- src/lib/pdf/templates/default.json
+
+---
+
+## PWA Support
+
+PWA is implemented manually for Vite 8 compatibility.
+
+- Manifest: public/manifest.webmanifest
+- Service worker: public/sw.js
+- Offline fallback page: public/offline.html
+- Icons: public/pwa-192.png and public/pwa-512.png
+
+Service worker strategy:
+
+- Stale-while-revalidate for static assets (scripts, styles, images, fonts)
+- Network-first for page navigation with fallback to cached shell/offline page
+- Network-first runtime cache for same-origin GET requests
+- Versioned cache cleanup during activation
+- Skip waiting + user update prompt flow
 
 ---
 
 ## Invoice Calculation
 
-Totals follow this formula:
-
-```
-subtotal        = sum of (quantity * unitPrice) for all line items
-discountAmount  = subtotal * rate  OR  fixed amount (whichever type is selected)
+```text
+subtotal        = sum(quantity * unitPrice)
+discountAmount  = percentage or fixed value
 taxableAmount   = subtotal - discountAmount
-taxAmount       = taxableAmount * taxRate  (if tax is enabled, otherwise 0)
+taxAmount       = taxableAmount * taxRate (if tax enabled)
 total           = taxableAmount + taxAmount
 ```
-
-All computed values are rounded to two decimal places.
 
 ---
 
@@ -91,8 +113,8 @@ All computed values are rounded to two decimal places.
 
 ### Prerequisites
 
-- Node.js 18 or later
-- npm 9 or later
+- Node.js 18+
+- npm 9+
 
 ### Installation
 
@@ -102,29 +124,23 @@ cd invoid
 npm install
 ```
 
-### Development
+### Run Development Server
 
 ```bash
 npm run dev
 ```
 
-Starts the Vite development server with hot module replacement. Open `http://localhost:5173` in your browser.
-
-### Production Build
+### Build
 
 ```bash
 npm run build
 ```
-
-Compiles TypeScript and bundles the application into `dist/`. The build artifact is a fully static site with no server-side dependencies.
 
 ### Preview Production Build
 
 ```bash
 npm run preview
 ```
-
-Serves the `dist/` directory locally to verify the production build before deployment.
 
 ### Lint
 
@@ -138,25 +154,15 @@ npm run lint
 
 | Data | Storage | Key |
 |---|---|---|
-| Products and categories | IndexedDB (`invoid` database) | — |
-| Saved invoices | IndexedDB (`invoid` database) | — |
-| Business settings | `localStorage` | `invoid-settings` |
-| Active invoice state | In-memory (Zustand, not persisted) | — |
-
-The active invoice in progress is intentionally ephemeral — it resets when the page is refreshed or after a successful export. Settings persist across sessions via Zustand's `persist` middleware.
-
----
-
-## Roadmap
-
-The following features are planned but not yet implemented:
-
-- **PDF export** — Generate a downloadable PDF invoice using `pdf-lib`.
-- **PWA / installability** — Add a service worker via `vite-plugin-pwa` (Workbox) to enable offline installation and caching.
-- **Invoice notes** — Expose the `notes` field (already typed) in the invoice builder UI.
+| Categories | IndexedDB (invoid-db) | categories |
+| Products | IndexedDB (invoid-db) | products |
+| Customers | IndexedDB (invoid-db) | customers |
+| Saved invoices | IndexedDB (invoid-db) | invoices |
+| App settings | localStorage | invoid-settings |
 
 ---
 
 ## License
 
-This project does not currently have a license file. All rights reserved unless otherwise stated.
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+See LICENSE for the full license text.
