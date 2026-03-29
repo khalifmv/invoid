@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offline | Invoid</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(165deg, #f6f7f7 0%, #e9edf0 100%);
+        color: #111827;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+
+      .panel {
+        width: min(92vw, 420px);
+        border: 1px solid #d6dbe1;
+        border-radius: 16px;
+        background: #ffffff;
+        padding: 24px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.2rem;
+      }
+
+      p {
+        margin: 0;
+        color: #4b5563;
+        line-height: 1.45;
+      }
+
+      .actions {
+        margin-top: 16px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 10px;
+        background: #0f172a;
+        color: #fff;
+        font-size: 0.9rem;
+        font-weight: 600;
+        padding: 10px 14px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #1f2937;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="panel">
+      <h1>You are offline</h1>
+      <p>
+        Invoid can still open previously cached pages. Reconnect to access uncached routes and fetch fresh assets.
+      </p>
+      <div class="actions">
+        <button type="button" onclick="window.location.reload()">Try again</button>
+      </div>
+    </section>
+  </body>
+</html>
