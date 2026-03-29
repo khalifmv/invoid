@@ -9,7 +9,7 @@ import { SettingsPage } from './pages/SettingsPage'
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <Routes>
         <Route element={<AppLayout />} path="/">
           <Route index element={<InvoicePage />} />

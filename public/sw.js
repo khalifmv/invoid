@@ -3,14 +3,18 @@ const STATIC_CACHE = `invoid-static-${APP_VERSION}`
 const PAGE_CACHE = `invoid-pages-${APP_VERSION}`
 const RUNTIME_CACHE = `invoid-runtime-${APP_VERSION}`
 const CACHE_PREFIX = 'invoid-'
+const BASE_PATH = new URL(self.registration.scope).pathname
+const withBase = (path) => {
+  return `${BASE_PATH}${path.replace(/^\//, '')}`
+}
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/offline.html',
-  '/favicon.svg',
-  '/pwa-192.png',
-  '/pwa-512.png',
-  '/manifest.webmanifest',
+  withBase('/'),
+  withBase('/index.html'),
+  withBase('/offline.html'),
+  withBase('/favicon.svg'),
+  withBase('/pwa-192.png'),
+  withBase('/pwa-512.png'),
+  withBase('/manifest.webmanifest'),
 ]
 
 const shouldCacheResponse = (response) => {
@@ -86,12 +90,12 @@ const networkFirstPage = async (request) => {
       return cachedPage
     }
 
-    const appShell = await caches.match('/index.html')
+    const appShell = await caches.match(withBase('/index.html'))
     if (appShell) {
       return appShell
     }
 
-    const offlinePage = await caches.match('/offline.html')
+    const offlinePage = await caches.match(withBase('/offline.html'))
     if (offlinePage) {
       return offlinePage
     }

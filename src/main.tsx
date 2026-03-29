@@ -5,7 +5,10 @@ import App from './App.tsx'
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').then((registration) => {
+    const baseUrl = import.meta.env.BASE_URL
+    const swUrl = `${baseUrl}sw.js`
+
+    void navigator.serviceWorker.register(swUrl, { scope: baseUrl }).then((registration) => {
       let hasReloaded = false
 
       const askForUpdate = () => {
