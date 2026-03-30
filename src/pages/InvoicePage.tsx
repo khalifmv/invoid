@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { Button } from '../components/ui/Button'
 import { Card, CardTitle } from '../components/ui/Card'
 import { Dialog } from '../components/ui/Dialog'
+import { ProductEditorDialog, type ProductFormData } from '../components/dialogs/ProductEditorDialog'
 import { DropdownSelect, type DropdownOption } from '../components/ui/DropdownSelect'
 import { Input } from '../components/ui/Input'
 import { NumberInput } from '../components/ui/NumberInput'
@@ -24,7 +25,7 @@ import {
   sanitizeQuantityForUnit,
   UNIT_OPTIONS,
 } from '../lib/item-semantics'
-import type { DiscountType, PaymentMethod, PricingMode, UnitCode } from '../types'
+import type { DiscountType, PaymentMethod, PaymentStatus, PricingMode, UnitCode } from '../types'
 import { useCatalogStore } from '../store/catalogStore'
 import { useCustomerStore } from '../store/customerStore'
 import { selectInvoiceTotals, useInvoiceStore } from '../store/invoiceStore'
@@ -95,12 +96,13 @@ export function InvoicePage() {
     items,
     customerId,
     payment,
+    status,
     discountType,
     discountValue,
     taxEnabled,
     taxRate,
     addItemFromProduct,
-    addManualItem,
+    addCustomItem,
     updateItem,
     removeItem,
     setBankTransferDetails,
@@ -111,6 +113,7 @@ export function InvoicePage() {
     setEWalletDetails,
     setOtherPaymentNote,
     setPaymentMethod,
+    setPaymentStatus,
     setTaxEnabled,
     setTaxRate,
     saveInvoice,
@@ -135,6 +138,7 @@ export function InvoicePage() {
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false)
   const [isSavingCustomer, setIsSavingCustomer] = useState(false)
   const [customerForm, setCustomerForm] = useState<CustomerFormState>(EMPTY_CUSTOMER_FORM)
+  const [isManualAddDialogOpen, setIsManualAddDialogOpen] = useState(false)
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === selectedProductId) ?? null,
@@ -190,6 +194,11 @@ export function InvoicePage() {
     if (selectedProduct) {
       addItemFromProduct(selectedProduct)
     }
+  }
+
+  const handleSaveManualItem = (data: ProductFormData) => {
+    addCustomItem(data)
+    setIsManualAddDialogOpen(false)
   }
 
   const cashAmountPaid = payment.method === 'cash' ? payment.amountPaid : 0
@@ -405,7 +414,7 @@ export function InvoicePage() {
               <Button onClick={handleAddSelectedProduct} disabled={!selectedProduct}>
                 + Add
               </Button>
-              <Button variant="outline" onClick={addManualItem}>
+              <Button variant="outline" onClick={() => setIsManualAddDialogOpen(true)}>
                 + Manual
               </Button>
             </div>
@@ -438,163 +447,164 @@ export function InvoicePage() {
                           : computeInvoiceLineTotal(normalizedItem)
                         const amountLabel = isEditingDesktop
                           ? formatItemAmountLabel(
-                              draft.quantity,
-                              draft.unitCode,
-                              draft.customUnitLabel,
-                              draft.pricingMode,
-                            )
+                            draft.quantity,
+                            draft.unitCode,
+                            draft.customUnitLabel,
+                            draft.pricingMode,
+                          )
                           : formatItemAmountLabel(
-                              normalizedItem.quantity,
-                              normalizedItem.unitCode,
-                              normalizedItem.customUnitLabel,
-                              normalizedItem.pricingMode,
-                            )
+                            normalizedItem.quantity,
+                            normalizedItem.unitCode,
+                            normalizedItem.customUnitLabel,
+                            normalizedItem.pricingMode,
+                          )
 
                         return (
-                        <tr key={item.id} className="border-t border-stone-200 bg-white">
-                          <td className="p-2 align-top">
-                            <div className="md:hidden">
-                              <p className="truncate text-sm font-semibold text-zinc-800">{item.name}</p>
-                              <p className="mt-1 text-xs text-zinc-500">
-                                {normalizedItem.pricingMode === 'flat'
-                                  ? `Flat fee ${currency.format(item.unitPrice)}`
-                                  : `${amountLabel} x ${currency.format(item.unitPrice)}`}
-                              </p>
-                            </div>
-                            <div className="hidden md:block">
-                              {isEditingDesktop ? (
-                                <Input
-                                  value={draft.name}
-                                  onChange={(event) =>
-                                    handleDraftChange(item.id, { name: event.target.value })
-                                  }
-                                  aria-label="Item name"
-                                />
-                              ) : (
-                                <p className="text-sm font-semibold text-zinc-800">{item.name}</p>
-                              )}
-                            </div>
-                          </td>
-                          <td className="hidden p-2 md:table-cell">
-                            {isEditingDesktop ? (
-                              <div className="grid gap-2">
-                                <NumberInput
-                                  min={0}
-                                  value={draft.quantity}
-                                  allowDecimal={isDecimalAllowedForUnit(draft.unitCode)}
-                                  onValueChange={(quantity) => handleDraftChange(item.id, { quantity })}
-                                  aria-label="Amount"
-                                  disabled={draft.pricingMode === 'flat'}
-                                />
-                                <DropdownSelect
-                                  value={draft.unitCode}
-                                  onChange={(nextValue) => {
-                                    const nextUnitCode = normalizeUnitCode(nextValue)
-                                    handleDraftChange(item.id, {
-                                      unitCode: nextUnitCode,
-                                      quantity: sanitizeQuantityForUnit(draft.quantity, nextUnitCode),
-                                      customUnitLabel:
-                                        nextUnitCode === 'custom' ? draft.customUnitLabel : '',
-                                    })
-                                  }}
-                                  options={unitOptions}
-                                />
-                                {draft.unitCode === 'custom' && (
+                          <tr key={item.id} className="border-t border-stone-200 bg-white">
+                            <td className="p-2 align-top">
+                              <div className="md:hidden">
+                                <p className="truncate text-sm font-semibold text-zinc-800">{item.name}</p>
+                                <p className="mt-1 text-xs text-zinc-500">
+                                  {normalizedItem.pricingMode === 'flat'
+                                    ? `Flat fee ${currency.format(item.unitPrice)}`
+                                    : `${amountLabel} x ${currency.format(item.unitPrice)}`}
+                                </p>
+                              </div>
+                              <div className="hidden md:block">
+                                {isEditingDesktop ? (
                                   <Input
-                                    value={draft.customUnitLabel}
+                                    value={draft.name}
                                     onChange={(event) =>
-                                      handleDraftChange(item.id, { customUnitLabel: event.target.value })
+                                      handleDraftChange(item.id, { name: event.target.value })
                                     }
-                                    placeholder="Custom unit"
+                                    aria-label="Item name"
                                   />
+                                ) : (
+                                  <p className="text-sm font-semibold text-zinc-800">{item.name}</p>
                                 )}
                               </div>
-                            ) : (
-                              <p className="text-sm text-zinc-700">{amountLabel}</p>
-                            )}
-                          </td>
-                          <td className="hidden p-2 md:table-cell">
-                            {isEditingDesktop ? (
-                              <div className="grid gap-2">
-                                <NumberInput
-                                  min={0}
-                                  value={draft.unitPrice}
-                                  onValueChange={(unitPrice) => handleDraftChange(item.id, { unitPrice })}
-                                  aria-label={draft.pricingMode === 'flat' ? 'Flat fee' : 'Unit price'}
-                                />
-                                <DropdownSelect
-                                  value={draft.pricingMode}
-                                  onChange={(nextValue) => {
-                                    const nextPricingMode = normalizePricingMode(nextValue)
-                                    handleDraftChange(item.id, {
-                                      pricingMode: nextPricingMode,
-                                      quantity:
-                                        nextPricingMode === 'flat'
-                                          ? 1
-                                          : sanitizeQuantityForUnit(draft.quantity, draft.unitCode),
-                                    })
-                                  }}
-                                  options={pricingModeOptions}
-                                />
-                              </div>
-                            ) : (
-                              <p className="text-sm text-zinc-700">
-                                {currency.format(item.unitPrice)}
-                                {normalizedItem.pricingMode === 'flat' ? ' (flat)' : ''}
-                              </p>
-                            )}
-                          </td>
-                          <td className="p-2 text-right align-middle text-sm font-semibold text-zinc-800">
-                            {currency.format(lineTotal)}
-                          </td>
-                          <td className="p-2">
-                            <div className="flex justify-end gap-1">
-                              {isEditingDesktop && isDesktop ? (
-                                <>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => saveDesktopEditor(item.id)}
-                                    disabled={draft.name.trim().length === 0}
-                                    aria-label="Save item"
-                                  >
-                                    <Save className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={cancelDesktopEditor}
-                                    aria-label="Cancel editing item"
-                                  >
-                                    Cancel
-                                  </Button>
-                                </>
+                            </td>
+                            <td className="hidden p-2 md:table-cell">
+                              {isEditingDesktop ? (
+                                <div className="grid gap-2">
+                                  <NumberInput
+                                    min={0}
+                                    value={draft.quantity}
+                                    allowDecimal={isDecimalAllowedForUnit(draft.unitCode)}
+                                    onValueChange={(quantity) => handleDraftChange(item.id, { quantity })}
+                                    aria-label="Amount"
+                                    disabled={draft.pricingMode === 'flat'}
+                                  />
+                                  <DropdownSelect
+                                    value={draft.unitCode}
+                                    onChange={(nextValue) => {
+                                      const nextUnitCode = normalizeUnitCode(nextValue)
+                                      handleDraftChange(item.id, {
+                                        unitCode: nextUnitCode,
+                                        quantity: sanitizeQuantityForUnit(draft.quantity, nextUnitCode),
+                                        customUnitLabel:
+                                          nextUnitCode === 'custom' ? draft.customUnitLabel : '',
+                                      })
+                                    }}
+                                    options={unitOptions}
+                                  />
+                                  {draft.unitCode === 'custom' && (
+                                    <Input
+                                      value={draft.customUnitLabel}
+                                      onChange={(event) =>
+                                        handleDraftChange(item.id, { customUnitLabel: event.target.value })
+                                      }
+                                      placeholder="Custom unit"
+                                    />
+                                  )}
+                                </div>
                               ) : (
-                                <>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                      isDesktop ? openDesktopEditor(item.id) : openMobileEditor(item.id)
-                                    }
-                                    aria-label="Edit item"
-                                  >
-                                    <PenLine className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="danger"
-                                    size="sm"
-                                    onClick={() => removeItem(item.id)}
-                                    aria-label="Remove item"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </>
+                                <p className="text-sm text-zinc-700">{amountLabel}</p>
                               )}
-                            </div>
-                          </td>
-                        </tr>
-                      )})}
+                            </td>
+                            <td className="hidden p-2 md:table-cell">
+                              {isEditingDesktop ? (
+                                <div className="grid gap-2">
+                                  <NumberInput
+                                    min={0}
+                                    value={draft.unitPrice}
+                                    onValueChange={(unitPrice) => handleDraftChange(item.id, { unitPrice })}
+                                    aria-label={draft.pricingMode === 'flat' ? 'Flat fee' : 'Unit price'}
+                                  />
+                                  <DropdownSelect
+                                    value={draft.pricingMode}
+                                    onChange={(nextValue) => {
+                                      const nextPricingMode = normalizePricingMode(nextValue)
+                                      handleDraftChange(item.id, {
+                                        pricingMode: nextPricingMode,
+                                        quantity:
+                                          nextPricingMode === 'flat'
+                                            ? 1
+                                            : sanitizeQuantityForUnit(draft.quantity, draft.unitCode),
+                                      })
+                                    }}
+                                    options={pricingModeOptions}
+                                  />
+                                </div>
+                              ) : (
+                                <p className="text-sm text-zinc-700">
+                                  {currency.format(item.unitPrice)}
+                                  {normalizedItem.pricingMode === 'flat' ? ' (flat)' : ''}
+                                </p>
+                              )}
+                            </td>
+                            <td className="p-2 text-right align-middle text-sm font-semibold text-zinc-800">
+                              {currency.format(lineTotal)}
+                            </td>
+                            <td className="p-2">
+                              <div className="flex justify-end gap-1">
+                                {isEditingDesktop && isDesktop ? (
+                                  <>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => saveDesktopEditor(item.id)}
+                                      disabled={draft.name.trim().length === 0}
+                                      aria-label="Save item"
+                                    >
+                                      <Save className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={cancelDesktopEditor}
+                                      aria-label="Cancel editing item"
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        isDesktop ? openDesktopEditor(item.id) : openMobileEditor(item.id)
+                                      }
+                                      aria-label="Edit item"
+                                    >
+                                      <PenLine className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="danger"
+                                      size="sm"
+                                      onClick={() => removeItem(item.id)}
+                                      aria-label="Remove item"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -646,6 +656,22 @@ export function InvoicePage() {
                 disabled={!taxEnabled}
                 aria-label="Tax rate %"
                 placeholder="Tax %"
+              />
+            </div>
+
+            <div className="mb-4 border-t border-stone-200 pt-3">
+              <label htmlFor="payment-status" className="mb-1 block text-xs font-semibold text-zinc-600">
+                Payment Status
+              </label>
+              <DropdownSelect
+                id="payment-status"
+                value={status}
+                onChange={(nextValue) => setPaymentStatus(nextValue as PaymentStatus)}
+                options={[
+                  { value: 'unpaid', label: 'Unpaid' },
+                  { value: 'paid', label: 'Paid' },
+                  { value: 'overdue', label: 'Overdue' }
+                ]}
               />
             </div>
 
@@ -779,6 +805,15 @@ export function InvoicePage() {
           </Card>
         </aside>
       </section>
+
+      <ProductEditorDialog
+        open={isManualAddDialogOpen}
+        onClose={() => setIsManualAddDialogOpen(false)}
+        onSave={handleSaveManualItem}
+        title="Add Manual Item"
+        saveLabel="Add to Invoice"
+        showCategory={false}
+      />
 
       <Dialog
         open={Boolean(mobileEditingItem)}

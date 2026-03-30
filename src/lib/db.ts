@@ -35,6 +35,14 @@ export class InvoidDatabase extends Dexie {
         invoices: 'id, createdAt, updatedAt',
         customers: 'id, name, createdAt, updatedAt',
       })
+
+    this.version(4)
+      .stores({
+        categories: 'id, name, createdAt, updatedAt',
+        products: 'id, name, categoryId, defaultPrice, createdAt, updatedAt',
+        invoices: 'id, createdAt, updatedAt, status',
+        customers: 'id, name, createdAt, updatedAt',
+      })
       .upgrade(async (transaction) => {
         await transaction
           .table('products')
@@ -60,6 +68,10 @@ export class InvoidDatabase extends Dexie {
                 pricingMode: normalizePricingMode(item.pricingMode ?? DEFAULT_PRICING_MODE),
               }
             })
+
+            if (!invoice.status) {
+              invoice.status = 'paid'
+            }
           })
       })
   }

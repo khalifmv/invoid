@@ -4,6 +4,7 @@ import type { FormEvent } from 'react'
 import { Button } from '../components/ui/Button'
 import { Card, CardTitle } from '../components/ui/Card'
 import { Dialog } from '../components/ui/Dialog'
+import { ProductEditorDialog, type ProductFormData } from '../components/dialogs/ProductEditorDialog'
 import { DropdownSelect, type DropdownOption } from '../components/ui/DropdownSelect'
 import { Input } from '../components/ui/Input'
 import { NumberInput } from '../components/ui/NumberInput'
@@ -59,12 +60,7 @@ export function CatalogPage() {
 
   const [activeTab, setActiveTab] = useState<CatalogTab>('products')
   const [newCategoryName, setNewCategoryName] = useState('')
-  const [newProductName, setNewProductName] = useState('')
-  const [newProductPrice, setNewProductPrice] = useState(0)
-  const [newProductCategoryId, setNewProductCategoryId] = useState('')
-  const [newProductUnitCode, setNewProductUnitCode] = useState<UnitCode>(DEFAULT_UNIT_CODE)
-  const [newProductCustomUnitLabel, setNewProductCustomUnitLabel] = useState('')
-  const [newProductPricingMode, setNewProductPricingMode] = useState<PricingMode>(DEFAULT_PRICING_MODE)
+  const [isNewProductDialogOpen, setIsNewProductDialogOpen] = useState(false)
   const [productDrafts, setProductDrafts] = useState<Record<string, ProductDraft>>({})
   const [editingDesktopProductId, setEditingDesktopProductId] = useState<string | null>(null)
   const [mobileEditingProductId, setMobileEditingProductId] = useState<string | null>(null)
@@ -112,22 +108,16 @@ export function CatalogPage() {
     setNewCategoryName('')
   }
 
-  const handleCreateProduct = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleSaveProductEditor = async (data: ProductFormData) => {
     await createProduct(
-      newProductName,
-      newProductPrice,
-      newProductCategoryId || null,
-      newProductUnitCode,
-      newProductCustomUnitLabel,
-      newProductPricingMode,
+      data.name,
+      data.price,
+      data.categoryId || null,
+      data.unitCode,
+      data.customUnitLabel,
+      data.pricingMode,
     )
-    setNewProductName('')
-    setNewProductPrice(0)
-    setNewProductCategoryId('')
-    setNewProductUnitCode(DEFAULT_UNIT_CODE)
-    setNewProductCustomUnitLabel('')
-    setNewProductPricingMode(DEFAULT_PRICING_MODE)
+    setIsNewProductDialogOpen(false)
   }
 
   const handleDraftChange = (productId: string, patch: Partial<ProductDraft>) => {
@@ -258,59 +248,10 @@ export function CatalogPage() {
 
           {activeTab === 'products' && (
             <div className="grid gap-4">
-              <form onSubmit={handleCreateProduct}>
-                <label htmlFor="prod-name" className="mb-1 block text-xs font-semibold text-zinc-600">
-                  New product
-                </label>
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-[1.8fr_1fr_1fr_auto]">
-                  <Input
-                    id="prod-name"
-                    value={newProductName}
-                    onChange={(event) => setNewProductName(event.target.value)}
-                    placeholder="Product name"
-                  />
-                  <NumberInput
-                    min={0}
-                    value={newProductPrice}
-                    onValueChange={setNewProductPrice}
-                    placeholder="Price"
-                  />
-                  <DropdownSelect
-                    value={newProductCategoryId}
-                    onChange={setNewProductCategoryId}
-                    options={categoryOptions}
-                  />
-                  <Button type="submit">Save</Button>
-                </div>
-
-                <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1.5fr]">
-                  <DropdownSelect
-                    value={newProductUnitCode}
-                    onChange={(nextValue) => {
-                      const nextUnitCode = normalizeUnitCode(nextValue)
-                      setNewProductUnitCode(nextUnitCode)
-                      if (nextUnitCode !== 'custom') {
-                        setNewProductCustomUnitLabel('')
-                      }
-                    }}
-                    options={unitOptions}
-                  />
-                  <DropdownSelect
-                    value={newProductPricingMode}
-                    onChange={(nextValue) => setNewProductPricingMode(normalizePricingMode(nextValue))}
-                    options={pricingModeOptions}
-                  />
-                  {newProductUnitCode === 'custom' ? (
-                    <Input
-                      value={newProductCustomUnitLabel}
-                      onChange={(event) => setNewProductCustomUnitLabel(event.target.value)}
-                      placeholder="Custom unit label (e.g. pack)"
-                    />
-                  ) : (
-                    <Input value={formatItemAmountLabel(1, newProductUnitCode, '', newProductPricingMode)} disabled />
-                  )}
-                </div>
-              </form>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-zinc-600">Manage your product catalog.</p>
+                <Button onClick={() => setIsNewProductDialogOpen(true)}>+ New Product</Button>
+              </div>
 
               {isLoading && <p className="text-sm text-zinc-400">Loading...</p>}
               {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
@@ -622,6 +563,14 @@ export function CatalogPage() {
           />
         </div>
       </Dialog>
+
+      <ProductEditorDialog
+        open={isNewProductDialogOpen}
+        onClose={() => setIsNewProductDialogOpen(false)}
+        onSave={handleSaveProductEditor}
+        categoryOptions={categoryOptions}
+        showCategory={true}
+      />
     </>
   )
 }

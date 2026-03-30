@@ -1,4 +1,4 @@
-import { Clock, FileText, Package, Settings, Users } from 'lucide-react'
+import { Clock, FileText, Package, Settings, Users, LayoutDashboard } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { NavLink } from 'react-router'
 import { cn } from '../../lib/cn'
@@ -10,7 +10,8 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Invoice', icon: FileText },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/invoice', label: 'Invoice', icon: FileText },
   { to: '/catalog', label: 'Catalog', icon: Package },
   { to: '/customers', label: 'Customers', icon: Users },
   { to: '/history', label: 'History', icon: Clock },

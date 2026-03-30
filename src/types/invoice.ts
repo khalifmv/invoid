@@ -5,6 +5,7 @@ export type DiscountType = 'percentage' | 'fixed'
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'e_wallet' | 'other'
 export type UnitCode = 'pcs' | 'kg' | 'g' | 'l' | 'ml' | 'hour' | 'day' | 'session' | 'service' | 'custom'
 export type PricingMode = 'per_unit' | 'flat'
+export type PaymentStatus = 'paid' | 'unpaid' | 'overdue'
 
 export interface CashPayment {
   method: 'cash'
@@ -46,6 +47,7 @@ export interface InvoiceDraft {
   items: InvoiceItem[]
   customerId: EntityId | null
   customerSnapshot: CustomerSnapshot | null
+  status: PaymentStatus
   payment: Payment
   discountType: DiscountType
   discountValue: number
@@ -61,6 +63,7 @@ export interface Invoice {
   items: InvoiceItem[]
   customerId: EntityId | null
   customerSnapshot: CustomerSnapshot | null
+  status: PaymentStatus
   payment: Payment
   subtotal: number
   discountAmount: number

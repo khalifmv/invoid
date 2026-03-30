@@ -22,7 +22,10 @@ import type {
   InvoiceTotals,
   Payment,
   PaymentMethod,
+  PaymentStatus,
+  PricingMode,
   Product,
+  UnitCode,
 } from '../types'
 import { useSettingsStore } from './settingsStore'
 
@@ -35,6 +38,7 @@ interface InvoiceState {
   discountValue: number
   taxEnabled: boolean
   taxRate: number
+  status: PaymentStatus
   historyInvoices: Invoice[]
   isHistoryLoading: boolean
   historyErrorMessage: string | null
@@ -43,6 +47,13 @@ interface InvoiceState {
 interface InvoiceActions {
   addItemFromProduct: (product: Product) => void
   addManualItem: () => void
+  addCustomItem: (data: {
+    name: string
+    price: number
+    unitCode: UnitCode
+    customUnitLabel: string
+    pricingMode: PricingMode
+  }) => void
   updateItem: (
     itemId: string,
     patch: Partial<
@@ -55,6 +66,7 @@ interface InvoiceActions {
   setBankTransferDetails: (patch: Partial<Omit<BankTransferPayment, 'method'>>) => void
   setEWalletDetails: (patch: Partial<Omit<EWalletPayment, 'method'>>) => void
   setOtherPaymentNote: (note: string) => void
+  setPaymentStatus: (status: PaymentStatus) => void
   setDiscountType: (discountType: DiscountType) => void
   setDiscountValue: (value: number) => void
   setCustomer: (customerId: string | null) => Promise<void>
@@ -71,6 +83,7 @@ export type InvoiceStore = InvoiceState & InvoiceActions
 type StoredInvoice = Invoice & {
   customerId?: string | null
   customerSnapshot?: CustomerSnapshot | null
+  status?: PaymentStatus
   payment?: Payment
 }
 
@@ -177,6 +190,7 @@ const normalizeStoredInvoice = (invoice: StoredInvoice): Invoice => {
     items: invoice.items.map((item) => normalizeInvoiceItem(item)),
     customerId: invoice.customerId ?? null,
     customerSnapshot: invoice.customerSnapshot ?? null,
+    status: invoice.status ?? 'paid',
     payment: invoice.payment ? sanitizePayment(invoice.payment) : createDefaultPayment(),
   }
 }
@@ -191,6 +205,7 @@ const createInitialInvoiceState = (): Pick<
   | 'discountValue'
   | 'taxEnabled'
   | 'taxRate'
+  | 'status'
 > => {
   const defaults = getTaxDefaults()
 
@@ -199,6 +214,7 @@ const createInitialInvoiceState = (): Pick<
     customerId: null,
     customerSnapshot: null,
     payment: createDefaultPayment(),
+    status: 'unpaid',
     discountType: 'percentage',
     discountValue: 0,
     taxEnabled: defaults.taxEnabled,
@@ -242,6 +258,23 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
           customUnitLabel: '',
           pricingMode: DEFAULT_PRICING_MODE,
           unitPrice: 0,
+        },
+      ],
+    })),
+
+  addCustomItem: (data) =>
+    set((state) => ({
+      items: [
+        ...state.items,
+        {
+          id: generateId(),
+          productId: null,
+          name: data.name,
+          quantity: 1,
+          unitCode: data.unitCode,
+          customUnitLabel: data.customUnitLabel,
+          pricingMode: data.pricingMode,
+          unitPrice: data.price,
         },
       ],
     })),
@@ -329,6 +362,8 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
       }
     }),
 
+  setPaymentStatus: (status) => set({ status }),
+
   setDiscountType: (discountType) => set({ discountType }),
   setDiscountValue: (value) => set({ discountValue: Number.isFinite(value) ? value : 0 }),
   setCustomer: async (customerId) => {
@@ -382,6 +417,7 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
       items: state.items.map((item) => normalizeInvoiceItem(item)),
       customerId: state.customerId,
       customerSnapshot: resolvedCustomerSnapshot,
+      status: state.status,
       payment: sanitizePayment(state.payment),
       subtotal: totals.subtotal,
       discountAmount: totals.discountAmount,
@@ -408,6 +444,7 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
       items: [],
       customerId: null,
       customerSnapshot: null,
+      status: 'unpaid',
       payment: createDefaultPayment(),
       discountType: 'percentage',
       discountValue: 0,

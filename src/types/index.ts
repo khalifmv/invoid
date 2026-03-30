@@ -15,6 +15,7 @@ export type {
   OtherPayment,
   Payment,
   PaymentMethod,
+  PaymentStatus,
   PricingMode,
   UnitCode,
 } from './invoice'

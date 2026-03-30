@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Button } from '../components/ui/Button'
 import { Card, CardTitle } from '../components/ui/Card'
+import { DropdownSelect } from '../components/ui/DropdownSelect'
 import { createCurrencyFormatter } from '../lib/currency'
 import { computeCashChange, computeInvoiceLineTotal } from '../lib/invoice-calculations'
 import {
@@ -18,6 +19,8 @@ import {
 import type { Invoice, PaymentMethod } from '../types'
 import { useInvoiceStore } from '../store/invoiceStore'
 import { useSettingsStore } from '../store/settingsStore'
+import { db } from '../lib/db'
+import type { PaymentStatus } from '../types'
 
 const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   cash: 'Cash',
@@ -101,6 +104,17 @@ export function InvoiceDetailPage() {
     }
   }
 
+  const handleStatusChange = async (nextValue: string) => {
+    if (!invoice) return
+    const newStatus = nextValue as PaymentStatus
+    try {
+      await db.invoices.update(invoice.id, { status: newStatus })
+      setInvoice({ ...invoice, status: newStatus })
+    } catch (error) {
+      console.error('Failed to update status', error)
+    }
+  }
+
   if (isLoading) {
     return (
       <section className="mx-auto w-full">
@@ -181,9 +195,26 @@ export function InvoiceDetailPage() {
         )}
 
         <div className="mb-4 rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
-          <p className="mb-1 text-xs font-semibold tracking-[0.08em] text-zinc-500 uppercase">Payment</p>
+          <div className="mb-3">
+            <label htmlFor="detail-payment-status" className="mb-1 block text-xs font-semibold tracking-[0.08em] text-zinc-500 uppercase">
+              Status
+            </label>
+            <DropdownSelect
+              id="detail-payment-status"
+              value={invoice.status}
+              onChange={handleStatusChange}
+              options={[
+                { value: 'unpaid', label: 'Unpaid' },
+                { value: 'paid', label: 'Paid' },
+                { value: 'overdue', label: 'Overdue' }
+              ]}
+              className="max-w-xs"
+            />
+          </div>
+
+          <p className="mb-1 text-xs font-semibold tracking-[0.08em] text-zinc-500 uppercase">Payment Method</p>
           <p className="text-sm font-semibold text-zinc-900">
-            Method: {PAYMENT_METHOD_LABEL[invoice.payment.method]}
+            {PAYMENT_METHOD_LABEL[invoice.payment.method]}
           </p>
 
           {invoice.payment.method === 'cash' && (
