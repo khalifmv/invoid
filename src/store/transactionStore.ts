@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { db } from '../lib/db'
+import { useCatalogStore } from './catalogStore'
 import { nowIso } from '../lib/date'
 import { computeTransactionTotals } from '../lib/transaction-calculations'
 import { generateId } from '../lib/ids'
@@ -430,10 +431,25 @@ export const useTransactionStore = create<TransactionStore>((set, get) => ({
       notes: '',
     }
 
-    await db.transactions.add(transaction)
+    await db.transaction('rw', db.transactions, db.products, async () => {
+      await db.transactions.add(transaction)
+
+      for (const item of state.items) {
+        if (item.productId) {
+          const product = await db.products.get(item.productId)
+          if (product && product.isAvailable && !product.hasUnlimitedStock) {
+            const newStock = Math.max(0, product.stock - item.quantity)
+            await db.products.update(product.id, { stock: newStock })
+          }
+        }
+      }
+    })
+
     set((current) => ({
       historyTransactions: [transaction, ...current.historyTransactions],
     }))
+
+    void useCatalogStore.getState().hydrate()
 
     return transaction
   },

@@ -98,7 +98,7 @@ export function TransactionDetailPage() {
     setIsPrintingPdf(true)
 
     try {
-      const { PdfLibRenderer, printPdfBlob, selectPdfTemplate } = await import('../lib/pdf')
+      const { PdfLibRenderer, printPdfBlob, selectPdfTemplate } = await import('../lib/pdf/index.ts')
       const template = await selectPdfTemplate(printDocType)
       const renderer = new PdfLibRenderer()
       const pdfBlob = await renderer.render(template, {

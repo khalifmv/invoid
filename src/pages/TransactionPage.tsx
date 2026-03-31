@@ -1,4 +1,4 @@
-import { Search, Plus, Trash2, Minus, PenLine } from 'lucide-react'
+import { Search, Plus, Trash2, Minus, PenLine, ChevronDown } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useShallow } from 'zustand/react/shallow'
@@ -8,6 +8,7 @@ import { ProductEditorDialog, type ProductFormData } from '../components/dialogs
 import { DropdownSelect, type DropdownOption } from '../components/ui/DropdownSelect'
 import { Input } from '../components/ui/Input'
 import { NumberInput } from '../components/ui/NumberInput'
+import { Toggle } from '../components/ui/Toggle'
 import { createCurrencyFormatter } from '../lib/currency'
 import { computeCashChange, computeTransactionLineTotal, isCashPaymentSufficient } from '../lib/transaction-calculations'
 import {
@@ -21,7 +22,7 @@ import {
   sanitizeQuantityForUnit,
   UNIT_OPTIONS,
 } from '../lib/item-semantics'
-import type { PaymentMethod, PdfDocType, Product, PricingMode, UnitCode } from '../types'
+import type { DiscountType, PaymentMethod, PaymentStatus, PdfDocType, Product, PricingMode, UnitCode } from '../types'
 import { useCatalogStore } from '../store/catalogStore'
 import { useCustomerStore } from '../store/customerStore'
 import { selectTransactionTotals, useTransactionStore } from '../store/transactionStore'
@@ -66,13 +67,23 @@ export function TransactionPage() {
     items,
     customerId,
     payment,
+    discountType,
+    discountValue,
+    taxEnabled,
+    taxRate,
+    status,
     addItemFromProduct,
     addCustomItem,
     updateItem,
     removeItem,
     setCashAmountPaid,
     setCustomer,
+    setDiscountType,
+    setDiscountValue,
+    setTaxEnabled,
+    setTaxRate,
     setPaymentMethod,
+    setPaymentStatus,
     saveTransaction,
     clearTransaction,
   } = useTransactionStore()
@@ -84,6 +95,7 @@ export function TransactionPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [exportErrorMessage, setExportErrorMessage] = useState<string | null>(null)
 
+  const [isDiscountTaxOpen, setIsDiscountTaxOpen] = useState(false)
   const [advancedEditingItemId, setAdvancedEditingItemId] = useState<string | null>(null)
   const [advancedDraft, setAdvancedDraft] = useState<MobileItemDraft>({
     name: '',
@@ -113,7 +125,7 @@ export function TransactionPage() {
   }, [productMedia])
 
   const filteredProducts = useMemo(() => {
-    let list = products.filter((p) => p.isAvailable && (p.hasUnlimitedStock || p.stock > 0))
+    let list = [...products]
     if (selectedCategory) {
       list = list.filter((p) => p.categoryId === selectedCategory)
     }
@@ -154,8 +166,14 @@ export function TransactionPage() {
   const handleProductClick = (product: Product) => {
     const existing = items.find((i) => i.productId === product.id)
     if (existing) {
+      if (!product.hasUnlimitedStock && existing.quantity >= product.stock) {
+        return
+      }
       updateItem(existing.id, { quantity: existing.quantity + 1 })
     } else {
+      if (!product.hasUnlimitedStock && product.stock <= 0) {
+        return
+      }
       addItemFromProduct(product)
     }
   }
@@ -231,9 +249,17 @@ export function TransactionPage() {
   const saveAdvancedEditor = () => {
     if (!advancedEditingItemId) return
 
+    const item = items.find((i) => i.id === advancedEditingItemId)
+    const product = item?.productId ? products.find((p) => p.id === item.productId) : null
+    let finalQty = advancedDraft.quantity
+
+    if (product && !product.hasUnlimitedStock && finalQty > product.stock) {
+      finalQty = product.stock
+    }
+
     updateItem(advancedEditingItemId, {
       name: advancedDraft.name,
-      quantity: advancedDraft.quantity,
+      quantity: finalQty,
       unitCode: advancedDraft.unitCode,
       customUnitLabel: advancedDraft.customUnitLabel,
       pricingMode: advancedDraft.pricingMode,
@@ -252,7 +278,7 @@ export function TransactionPage() {
       const savedTransaction = await saveTransaction()
       if (savedTransaction) {
         try {
-          const { PdfLibRenderer, downloadPdfBlob, selectPdfTemplate } = await import('../lib/pdf')
+          const { PdfLibRenderer, downloadPdfBlob, selectPdfTemplate } = await import('../lib/pdf/index.ts')
           const template = await selectPdfTemplate(exportDocType)
           const pdfRenderer = new PdfLibRenderer()
           const pdfBlob = await pdfRenderer.render(template, {
@@ -283,13 +309,13 @@ export function TransactionPage() {
   return (
     <>
       {/* Container override to stretch edge to edge inside Layout */}
-      <section className="-mx-4 -mt-4 flex h-[calc(100vh-theme(spacing.20))] flex-col sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8 lg:h-[calc(100vh-theme(spacing.20))] lg:flex-row shadow-sm overflow-hidden">
+      <section className="-mx-3 -mt-4 -mb-20 flex h-[calc(100vh-53px)] flex-col overflow-hidden md:-mx-6 md:-mt-5 md:-mb-6 lg:flex-row bg-stone-50">
 
         {/* Left Column (Products) */}
         <div className="flex flex-1 flex-col bg-stone-50 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-4 p-4 lg:p-6 lg:pb-4 border-b border-stone-200/50 bg-white/50 backdrop-blur-md">
             <div>
-              <h1 className="text-2xl font-bold text-zinc-900">Sales Transaction</h1>
+              <h1 className="text-2xl font-bold text-zinc-900">Transaction</h1>
               <p className="text-sm font-medium text-zinc-500">{currentDate}</p>
             </div>
             <div className="relative w-full max-w-sm">
@@ -304,7 +330,7 @@ export function TransactionPage() {
           </div>
 
           {/* Categories */}
-          <div className="no-scrollbar flex gap-3 overflow-x-auto p-4 lg:px-6">
+          <div className="bg-slate-200 no-scrollbar flex gap-3 overflow-x-auto p-4 lg:px-6">
             <button
               onClick={() => setSelectedCategory('')}
               className={`whitespace-nowrap rounded-xl border px-5 py-2.5 font-semibold transition-colors shadow-sm ${selectedCategory === ''
@@ -329,7 +355,7 @@ export function TransactionPage() {
           </div>
 
           {/* Grid */}
-          <div className="flex-1 overflow-y-auto p-4 pt-0 lg:px-6 lg:pb-6">
+          <div className="bg-slate-200/50 pt-4 flex-1 overflow-y-auto p-4 pt-0 lg:px-6 lg:pb-6">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
               <button
                 onClick={() => setIsManualAddDialogOpen(true)}
@@ -344,16 +370,20 @@ export function TransactionPage() {
               {filteredProducts.map((product) => {
                 const cover = coverMediaByProductId.get(product.id)
                 const inCart = items.some((i) => i.productId === product.id)
+                const isOrderable = product.isAvailable && (product.hasUnlimitedStock || product.stock > 0)
+
                 return (
                   <div
-                    onClick={() => handleProductClick(product)}
+                    onClick={() => isOrderable && handleProductClick(product)}
                     key={product.id}
-                    className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border-2 transition-all ${inCart
-                      ? 'border-blue-500 bg-blue-50/30 shadow-md ring-2 ring-blue-500/20'
-                      : 'border-stone-100 bg-white hover:border-blue-200 hover:shadow-md'
+                    className={`group relative flex flex-col overflow-hidden rounded-2xl border-2 transition-all ${!isOrderable
+                      ? 'cursor-not-allowed border-stone-100 bg-stone-50 opacity-60 grayscale'
+                      : inCart
+                        ? 'cursor-pointer border-blue-500 bg-blue-50/30 shadow-md ring-2 ring-blue-500/20'
+                        : 'cursor-pointer border-stone-100 bg-white hover:border-blue-200 hover:shadow-md'
                       }`}
                   >
-                    <div className="relative aspect-square w-full bg-stone-100 shrink-0">
+                    <div className="relative aspect-square w-full shrink-0 bg-stone-100">
                       {cover ? (
                         <img src={cover} alt={product.name} className="h-full w-full object-cover" />
                       ) : (
@@ -363,12 +393,25 @@ export function TransactionPage() {
                       )}
                     </div>
                     <div className="flex flex-1 flex-col justify-between p-3">
-                      <h3 className="line-clamp-2 text-sm font-semibold text-zinc-800 leading-tight">
+                      <h3 className="line-clamp-2 text-sm font-semibold leading-tight text-zinc-800">
                         {product.name}
                       </h3>
-                      <p className="mt-2 text-sm font-bold text-blue-600">
-                        {currency.format(product.defaultPrice)}
-                      </p>
+                      <div className="mt-2 flex items-center justify-between">
+                        {isOrderable ? (
+                          <>
+                            <span className="text-sm font-bold text-blue-600">
+                              {currency.format(product.defaultPrice)}
+                            </span>
+                            {!product.hasUnlimitedStock && (
+                              <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                                Stock: {product.stock}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-sm font-bold text-zinc-400">Unavailable</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )
@@ -414,6 +457,8 @@ export function TransactionPage() {
             ) : (
               <div className="flex flex-col gap-3">
                 {items.map((item) => {
+                  const product = item.productId ? products.find((p) => p.id === item.productId) : undefined
+                  const isAtStockLimit = product ? (!product.hasUnlimitedStock && item.quantity >= product.stock) : false
                   const cover = item.productId ? coverMediaByProductId.get(item.productId) : undefined
                   const lineTotal = computeTransactionLineTotal(item)
 
@@ -478,7 +523,7 @@ export function TransactionPage() {
                             <button
                               onClick={() => updateItem(item.id, { quantity: item.quantity + 1 })}
                               className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-zinc-600 shadow-sm border border-stone-200 hover:bg-stone-100 disabled:opacity-50"
-                              disabled={item.pricingMode === 'flat'}
+                              disabled={item.pricingMode === 'flat' || isAtStockLimit}
                             >
                               <Plus className="h-3 w-3" />
                             </button>
@@ -496,6 +541,60 @@ export function TransactionPage() {
           </div>
 
           <div className="border-t border-stone-200 bg-white p-4 shrink-0 shadow-[0_-4px_24px_rgba(0,0,0,0.02)] z-20">
+            <div className="mb-3 border-b border-stone-100 pb-3">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between py-1 text-sm font-bold text-zinc-700 transition-colors hover:text-blue-600"
+                onClick={() => setIsDiscountTaxOpen(!isDiscountTaxOpen)}
+              >
+                <span>Discount & Tax</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isDiscountTaxOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isDiscountTaxOpen && (
+                <div className="mt-3 grid gap-3 animate-in fade-in slide-in-from-top-2">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-zinc-500">Discount</label>
+                    <div className="flex gap-1">
+                      <select
+                        className="w-16 rounded-lg border border-stone-200 bg-stone-50 px-2 text-xs font-semibold text-zinc-600 outline-none"
+                        value={discountType}
+                        onChange={(e) => setDiscountType(e.target.value as DiscountType)}
+                      >
+                        <option value="fixed">Fixed</option>
+                        <option value="percentage">%</option>
+                      </select>
+                      <div className="flex-1">
+                        <NumberInput
+                          min={0}
+                          value={discountValue}
+                          onValueChange={setDiscountValue}
+                          aria-label="Discount value"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500">Service Tax</label>
+                      <div className="scale-75 origin-right">
+                        <Toggle checked={taxEnabled} onChange={(e) => setTaxEnabled(e.target.checked)} />
+                      </div>
+                    </div>
+                    <NumberInput
+                      min={0}
+                      max={100}
+                      value={taxRate}
+                      onValueChange={setTaxRate}
+                      disabled={!taxEnabled}
+                      placeholder="Rate %"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <dl className="mb-4 grid gap-2 text-sm text-zinc-600">
               <div className="flex justify-between">
                 <dt>Subtotal ({items.length})</dt>
@@ -519,16 +618,31 @@ export function TransactionPage() {
               </div>
             </dl>
 
-            <div className="mb-4">
-              <label className="mb-1.5 block text-xs font-bold text-zinc-700">Payment method <span className="text-red-500">*</span></label>
-              <DropdownSelect
-                value={payment.method}
-                onChange={(nextValue) => setPaymentMethod(nextValue as PaymentMethod)}
-                options={paymentMethodOptions}
-              />
+            <div className="mb-4 grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-zinc-700">Payment status <span className="text-red-500">*</span></label>
+                <DropdownSelect
+                  value={status}
+                  onChange={(nextValue) => setPaymentStatus(nextValue as PaymentStatus)}
+                  options={[
+                    { value: 'paid', label: 'Paid' },
+                    { value: 'unpaid', label: 'Unpaid' },
+                    { value: 'overdue', label: 'Overdue' }
+                  ]}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-zinc-700">Payment method <span className="text-red-500">*</span></label>
+                <DropdownSelect
+                  value={payment.method}
+                  onChange={(nextValue) => setPaymentMethod(nextValue as PaymentMethod)}
+                  options={paymentMethodOptions}
+                />
+              </div>
 
               {payment.method === 'cash' && (
-                <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className="col-span-2 mt-2 grid grid-cols-2 gap-2 border-t border-stone-100 pt-3">
                   <NumberInput
                     min={0}
                     value={payment.amountPaid}

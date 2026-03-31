@@ -58,15 +58,21 @@ export function DropdownSelect({
     const maxHeight = Math.max(120, Math.min(240, availableHeight - 4))
 
     const left = Math.max(gutter, Math.min(rect.left, viewportWidth - maxPanelWidth - gutter))
-    const top = shouldOpenUp ? Math.max(gutter, rect.top - maxHeight - 4) : rect.bottom + 4
 
-    setPanelStyle({
+    const style: React.CSSProperties = {
       position: 'fixed',
       left,
-      top,
       width: rect.width,
       maxHeight,
-    })
+    }
+
+    if (shouldOpenUp) {
+      style.bottom = viewportHeight - rect.top + 4
+    } else {
+      style.top = rect.bottom + 4
+    }
+
+    setPanelStyle(style)
   }
 
   useEffect(() => {
@@ -116,40 +122,40 @@ export function DropdownSelect({
   const dropdownPanel =
     isOpen && !disabled
       ? createPortal(
-          <ul
-            ref={panelRef}
-            role="listbox"
-            aria-labelledby={id}
-            style={panelStyle}
-            className="z-[1000] overflow-auto rounded-lg border border-zinc-200 bg-white p-1 shadow-xl"
-          >
-            {options.map((option) => {
-              const isSelected = option.value === value
+        <ul
+          ref={panelRef}
+          role="listbox"
+          aria-labelledby={id}
+          style={panelStyle}
+          className="z-[1000] overflow-auto rounded-lg border border-zinc-200 bg-white p-1 shadow-xl"
+        >
+          {options.map((option) => {
+            const isSelected = option.value === value
 
-              return (
-                <li key={option.value} role="option" aria-selected={isSelected}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onChange(option.value)
-                      setIsOpen(false)
-                    }}
-                    className={cn(
-                      'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm',
-                      isSelected
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-zinc-800 hover:bg-zinc-100',
-                    )}
-                  >
-                    <span className="truncate">{option.label}</span>
-                    {isSelected && <Check className="h-4 w-4" />}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>,
-          document.body,
-        )
+            return (
+              <li key={option.value} role="option" aria-selected={isSelected}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value)
+                    setIsOpen(false)
+                  }}
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm',
+                    isSelected
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-zinc-800 hover:bg-zinc-100',
+                  )}
+                >
+                  <span className="truncate">{option.label}</span>
+                  {isSelected && <Check className="h-4 w-4" />}
+                </button>
+              </li>
+            )
+          })}
+        </ul>,
+        document.body,
+      )
       : null
 
   return (
