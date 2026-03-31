@@ -106,6 +106,96 @@ const getTextWidth = (context: PdfRenderContext, text: string, size = context.fo
   return context.font.widthOfTextAtSize(text, size)
 }
 
+const fitTextToWidth = (
+  context: PdfRenderContext,
+  text: string,
+  maxWidth: number,
+  size: number,
+): string => {
+  const normalized = text.trim()
+  if (normalized.length === 0 || maxWidth <= 0) {
+    return ''
+  }
+
+  if (getTextWidth(context, normalized, size) <= maxWidth) {
+    return normalized
+  }
+
+  const ellipsis = '...'
+  if (getTextWidth(context, ellipsis, size) > maxWidth) {
+    return ''
+  }
+
+  let low = 0
+  let high = normalized.length
+  let best = ''
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2)
+    const candidate = `${normalized.slice(0, mid).trimEnd()}${ellipsis}`
+    const width = getTextWidth(context, candidate, size)
+
+    if (width <= maxWidth) {
+      best = candidate
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
+  }
+
+  return best
+}
+
+const wrapTextToWidth = (
+  context: PdfRenderContext,
+  text: string,
+  maxWidth: number,
+  size: number,
+  maxLines: number,
+): string[] => {
+  const normalized = text.trim()
+  if (normalized.length === 0 || maxLines <= 0) {
+    return ['']
+  }
+
+  if (getTextWidth(context, normalized, size) <= maxWidth) {
+    return [normalized]
+  }
+
+  const words = normalized.split(/\s+/)
+  const lines: string[] = []
+  let index = 0
+
+  while (index < words.length && lines.length < maxLines) {
+    if (lines.length === maxLines - 1) {
+      const rest = words.slice(index).join(' ')
+      lines.push(fitTextToWidth(context, rest, maxWidth, size))
+      break
+    }
+
+    let line = ''
+    while (index < words.length) {
+      const candidate = line.length > 0 ? `${line} ${words[index]}` : words[index]
+      if (getTextWidth(context, candidate, size) <= maxWidth) {
+        line = candidate
+        index += 1
+        continue
+      }
+
+      break
+    }
+
+    if (line.length === 0) {
+      line = fitTextToWidth(context, words[index], maxWidth, size)
+      index += 1
+    }
+
+    lines.push(line)
+  }
+
+  return lines.length > 0 ? lines : ['']
+}
+
 const renderHeaderBlock = (block: PdfHeaderBlock, context: PdfRenderContext): void => {
   const x = toNumberValue(block.position.x)
   const y = toNumberValue(block.position.y)
@@ -187,9 +277,20 @@ const renderPaymentBlock = (block: PdfPaymentBlock, context: PdfRenderContext): 
 const renderTableBlock = (block: PdfTableBlock, context: PdfRenderContext): void => {
   const x = toNumberValue(block.position.x)
   const y = toNumberValue(block.position.y)
-  const rowHeight = Math.max(16, toNumberValue(block.rowHeight, 22))
-  const columns = block.columns.filter((column) => Number.isFinite(column.width) && column.width > 0)
+  const rowHeight = Math.max(22, toNumberValue(block.rowHeight, 22))
+  const sourceColumns = block.columns.filter((column) => Number.isFinite(column.width) && column.width > 0)
   const items = Array.isArray(block.data) ? block.data : []
+
+  const rawWidth = sourceColumns.reduce((sum, column) => sum + column.width, 0)
+  const maxTableWidth = Math.max(260, context.page.getWidth() - x - 40)
+  const scaleRatio = rawWidth > maxTableWidth ? maxTableWidth / rawWidth : 1
+  const columns =
+    scaleRatio < 1
+      ? sourceColumns.map((column) => ({
+          ...column,
+          width: Math.max(56, column.width * scaleRatio),
+        }))
+      : sourceColumns
   const totalWidth = columns.reduce((sum, column) => sum + column.width, 0)
 
   const headerBottom = y - rowHeight
@@ -202,15 +303,17 @@ const renderTableBlock = (block: PdfTableBlock, context: PdfRenderContext): void
   const headerBaseline = y - 14
   let cursorX = x
   columns.forEach((column) => {
-    const label = toStringValue(column.label)
+    const labelSize = context.fontSize - 0.2
+    const maxLabelWidth = Math.max(10, column.width - CELL_PADDING_X * 2)
+    const label = fitTextToWidth(context, toStringValue(column.label), maxLabelWidth, labelSize)
     const isRight =
       column.align === 'right' || ['qty', 'price', 'total', 'quantity', 'unitPrice'].includes(column.key)
 
     if (isRight) {
-      const labelWidth = getTextWidth(context, label, context.fontSize - 0.2)
-      drawText(context, label, cursorX + column.width - labelWidth - CELL_PADDING_X, headerBaseline, context.fontSize - 0.2)
+      const labelWidth = getTextWidth(context, label, labelSize)
+      drawText(context, label, cursorX + column.width - labelWidth - CELL_PADDING_X, headerBaseline, labelSize)
     } else {
-      drawText(context, label, cursorX + CELL_PADDING_X, headerBaseline, context.fontSize - 0.2)
+      drawText(context, label, cursorX + CELL_PADDING_X, headerBaseline, labelSize)
     }
     cursorX += column.width
   })
@@ -226,20 +329,31 @@ const renderTableBlock = (block: PdfTableBlock, context: PdfRenderContext): void
 
     const row = entry as Record<string, unknown>
     const rowTop = headerBottom - rowIndex * rowHeight
-    const rowBaseline = rowTop - 14
+    const cellTextSize = context.fontSize - 0.5
+    const lineHeight = cellTextSize + 1
     let cellX = x
 
     columns.forEach((column) => {
       const cellValue = toStringValue(row[column.key])
+      const maxTextWidth = Math.max(10, column.width - CELL_PADDING_X * 2)
+      const wrappedLines = wrapTextToWidth(context, cellValue, maxTextWidth, cellTextSize, 2)
+      const totalTextHeight = wrappedLines.length * lineHeight
+      const firstLineY = rowTop - (rowHeight - totalTextHeight) * 0.5 - cellTextSize + 2
       const isRight =
         column.align === 'right' || ['qty', 'price', 'total', 'quantity', 'unitPrice'].includes(column.key)
 
-      if (isRight) {
-        const width = getTextWidth(context, cellValue, context.fontSize - 0.5)
-        drawText(context, cellValue, cellX + column.width - width - CELL_PADDING_X, rowBaseline, context.fontSize - 0.5)
-      } else {
-        drawText(context, cellValue, cellX + CELL_PADDING_X, rowBaseline, context.fontSize - 0.5)
-      }
+      wrappedLines.forEach((line, lineIndex) => {
+        const lineY = firstLineY - lineIndex * lineHeight
+
+        if (isRight) {
+          const width = getTextWidth(context, line, cellTextSize)
+          drawText(context, line, cellX + column.width - width - CELL_PADDING_X, lineY, cellTextSize)
+          return
+        }
+
+        drawText(context, line, cellX + CELL_PADDING_X, lineY, cellTextSize)
+      })
+
       cellX += column.width
     })
 

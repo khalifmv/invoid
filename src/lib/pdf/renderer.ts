@@ -171,7 +171,7 @@ const renderPaginatedTableBlock = (
   color: ReturnType<typeof parseTemplateColor>,
 ): PaginatedTableRenderResult => {
   const rows = getTableRows(tableBlock)
-  const rowHeight = Math.max(16, toNumberValue(tableBlock.rowHeight, 22))
+  const rowHeight = Math.max(22, toNumberValue(tableBlock.rowHeight, 22))
   const margin = template.page.margin
   const firstPageTableY = toNumberValue(tableBlock.position.y, pageSize.height - margin - 40)
   const nextPageTableY = pageSize.height - margin - 40
