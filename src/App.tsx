@@ -4,8 +4,8 @@ import { CatalogPage } from './pages/CatalogPage'
 import { CustomersPage } from './pages/CustomersPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { HistoryPage } from './pages/HistoryPage'
-import { InvoiceDetailPage } from './pages/InvoiceDetailPage'
-import { InvoicePage } from './pages/InvoicePage'
+import { TransactionDetailPage } from './pages/TransactionDetailPage'
+import { TransactionPage } from './pages/TransactionPage'
 import { SettingsPage } from './pages/SettingsPage'
 
 function App() {
@@ -14,11 +14,11 @@ function App() {
       <Routes>
         <Route element={<AppLayout />} path="/">
           <Route index element={<DashboardPage />} />
-          <Route element={<InvoicePage />} path="invoice" />
+          <Route element={<TransactionPage />} path="transaction" />
           <Route element={<CatalogPage />} path="catalog" />
           <Route element={<CustomersPage />} path="customers" />
           <Route element={<HistoryPage />} path="history" />
-          <Route element={<InvoiceDetailPage />} path="history/:invoiceId" />
+          <Route element={<TransactionDetailPage />} path="history/:transactionId" />
           <Route element={<SettingsPage />} path="settings" />
         </Route>
         <Route element={<Navigate replace to="/" />} path="*" />

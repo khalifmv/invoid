@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button'
 import { Card, CardTitle } from '../components/ui/Card'
 import { DropdownSelect } from '../components/ui/DropdownSelect'
 import { createCurrencyFormatter } from '../lib/currency'
-import { computeCashChange, computeInvoiceLineTotal } from '../lib/invoice-calculations'
+import { computeCashChange, computeTransactionLineTotal } from '../lib/transaction-calculations'
 import {
   DEFAULT_PRICING_MODE,
   DEFAULT_UNIT_CODE,
@@ -16,11 +16,10 @@ import {
   normalizeUnitCode,
   sanitizeQuantityForUnit,
 } from '../lib/item-semantics'
-import type { Invoice, PaymentMethod } from '../types'
-import { useInvoiceStore } from '../store/invoiceStore'
+import type { PaymentMethod, PaymentStatus, PdfDocType, Transaction } from '../types'
+import { useTransactionStore } from '../store/transactionStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { db } from '../lib/db'
-import type { PaymentStatus } from '../types'
 
 const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   cash: 'Cash',
@@ -29,44 +28,47 @@ const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   other: 'Other',
 }
 
-export function InvoiceDetailPage() {
-  const { invoiceId } = useParams()
-  const getInvoiceById = useInvoiceStore((state) => state.getInvoiceById)
+export function TransactionDetailPage() {
+  const { transactionId } = useParams()
+  const getTransactionById = useTransactionStore((state) => state.getTransactionById)
   const currencyCode = useSettingsStore((state) => state.currency)
   const businessName = useSettingsStore((state) => state.businessName)
   const logoDataUrl = useSettingsStore((state) => state.logoDataUrl)
-  const [invoice, setInvoice] = useState<Invoice | null>(null)
+  const lastPdfDocType = useSettingsStore((state) => state.lastPdfDocType)
+  const setLastPdfDocType = useSettingsStore((state) => state.setLastPdfDocType)
+  const [transaction, setTransaction] = useState<Transaction | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isPrintingPdf, setIsPrintingPdf] = useState(false)
   const [printErrorMessage, setPrintErrorMessage] = useState<string | null>(null)
+  const [printDocType, setPrintDocType] = useState<PdfDocType>(lastPdfDocType)
 
   useEffect(() => {
     let isActive = true
 
-    const loadInvoice = async () => {
-      if (!invoiceId) {
-        setInvoice(null)
+    const loadTransaction = async () => {
+      if (!transactionId) {
+        setTransaction(null)
         setIsLoading(false)
         return
       }
 
       setIsLoading(true)
-      const foundInvoice = await getInvoiceById(invoiceId)
+      const foundTransaction = await getTransactionById(transactionId)
 
       if (!isActive) {
         return
       }
 
-      setInvoice(foundInvoice)
+      setTransaction(foundTransaction)
       setIsLoading(false)
     }
 
-    void loadInvoice()
+    void loadTransaction()
 
     return () => {
       isActive = false
     }
-  }, [getInvoiceById, invoiceId])
+  }, [getTransactionById, transactionId])
 
   const currency = useMemo(() => createCurrencyFormatter(currencyCode), [currencyCode])
   const dateTime = useMemo(
@@ -78,8 +80,17 @@ export function InvoiceDetailPage() {
     [],
   )
 
+  useEffect(() => {
+    setPrintDocType(lastPdfDocType)
+  }, [lastPdfDocType])
+
+  const handlePrintDocTypeChange = (docType: PdfDocType) => {
+    setPrintDocType(docType)
+    setLastPdfDocType(docType)
+  }
+
   const handlePrintTemplatePdf = async () => {
-    if (!invoice || isPrintingPdf) {
+    if (!transaction || isPrintingPdf) {
       return
     }
 
@@ -87,16 +98,17 @@ export function InvoiceDetailPage() {
     setIsPrintingPdf(true)
 
     try {
-      const { PdfLibRenderer, loadDefaultPdfTemplate, printPdfBlob } = await import('../lib/pdf')
-      const template = await loadDefaultPdfTemplate()
+      const { PdfLibRenderer, printPdfBlob, selectPdfTemplate } = await import('../lib/pdf')
+      const template = await selectPdfTemplate(printDocType)
       const renderer = new PdfLibRenderer()
       const pdfBlob = await renderer.render(template, {
-        invoice,
+        invoice: transaction,
         businessName,
         currencyCode,
         logoDataUrl,
       })
-      printPdfBlob(pdfBlob, `invoice-${invoice.id}.pdf`)
+      const filePrefix = printDocType === 'receipt' ? 'receipt' : 'invoice'
+      printPdfBlob(pdfBlob, `${filePrefix}-${transaction.id}.pdf`)
     } catch {
       setPrintErrorMessage('Failed to generate print-ready PDF. Please try again.')
     } finally {
@@ -105,11 +117,11 @@ export function InvoiceDetailPage() {
   }
 
   const handleStatusChange = async (nextValue: string) => {
-    if (!invoice) return
+    if (!transaction) return
     const newStatus = nextValue as PaymentStatus
     try {
-      await db.invoices.update(invoice.id, { status: newStatus })
-      setInvoice({ ...invoice, status: newStatus })
+      await db.transactions.update(transaction.id, { status: newStatus })
+      setTransaction({ ...transaction, status: newStatus })
     } catch (error) {
       console.error('Failed to update status', error)
     }
@@ -119,19 +131,19 @@ export function InvoiceDetailPage() {
     return (
       <section className="mx-auto w-full">
         <Card>
-          <CardTitle>Invoice Detail</CardTitle>
-          <p className="text-sm text-zinc-400">Loading invoice...</p>
+          <CardTitle>Transaction Detail</CardTitle>
+          <p className="text-sm text-zinc-400">Loading transaction...</p>
         </Card>
       </section>
     )
   }
 
-  if (!invoice) {
+  if (!transaction) {
     return (
       <section className="mx-auto w-full">
         <Card>
-          <CardTitle>Invoice Detail</CardTitle>
-          <p className="text-sm text-red-600">Invoice not found.</p>
+          <CardTitle>Transaction Detail</CardTitle>
+          <p className="text-sm text-red-600">Transaction not found.</p>
           <Link
             className="mt-3 inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 px-4 text-sm font-semibold text-zinc-800 transition-colors hover:bg-zinc-100"
             to="/history"
@@ -145,7 +157,7 @@ export function InvoiceDetailPage() {
 
   return (
     <section className="mx-auto w-full print:mx-0">
-      <div className="mb-3 flex items-center justify-between gap-2 print:hidden">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden">
         <Link
           className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-800 transition-colors hover:bg-zinc-100"
           to="/history"
@@ -154,42 +166,67 @@ export function InvoiceDetailPage() {
           Back
         </Link>
 
-        <Button className="gap-2" onClick={() => void handlePrintTemplatePdf()} disabled={isPrintingPdf}>
-          <Printer className="h-4 w-4" />
-          {isPrintingPdf ? 'Preparing PDF...' : 'Print PDF'}
-        </Button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={printDocType === 'invoice' ? 'primary' : 'outline'}
+              onClick={() => handlePrintDocTypeChange('invoice')}
+              aria-label="Select invoice document type"
+              aria-pressed={printDocType === 'invoice'}
+            >
+              Invoice
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={printDocType === 'receipt' ? 'primary' : 'outline'}
+              onClick={() => handlePrintDocTypeChange('receipt')}
+              aria-label="Select receipt document type"
+              aria-pressed={printDocType === 'receipt'}
+            >
+              Receipt
+            </Button>
+          </div>
+
+          <Button className="gap-2" onClick={() => void handlePrintTemplatePdf()} disabled={isPrintingPdf}>
+            <Printer className="h-4 w-4" />
+            {isPrintingPdf ? 'Preparing PDF...' : 'Print PDF'}
+          </Button>
+        </div>
       </div>
 
       {printErrorMessage && <p className="mb-3 text-sm font-semibold text-red-600">{printErrorMessage}</p>}
 
       <Card className="print:rounded-none print:border-0 print:bg-white print:p-0">
-        <CardTitle className="print:mb-2">Invoice Detail</CardTitle>
+        <CardTitle className="print:mb-2">Transaction Detail</CardTitle>
 
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-stone-200 pb-3">
           <div>
-            <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500 uppercase">Invoice ID</p>
-            <p className="text-sm font-semibold text-zinc-900">{invoice.id}</p>
+            <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500 uppercase">Transaction ID</p>
+            <p className="text-sm font-semibold text-zinc-900">{transaction.id}</p>
           </div>
           <div className="">
             {businessName.trim().length > 0 && (
               <p className="text-sm font-semibold text-zinc-900">{businessName}</p>
             )}
-            <p className="text-sm text-zinc-600">{dateTime.format(new Date(invoice.createdAt))}</p>
+            <p className="text-sm text-zinc-600">{dateTime.format(new Date(transaction.createdAt))}</p>
           </div>
         </div>
 
-        {invoice.customerSnapshot && (
+        {transaction.customerSnapshot && (
           <div className="mb-4 rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
             <p className="mb-1 text-xs font-semibold tracking-[0.08em] text-zinc-500 uppercase">Customer</p>
-            <p className="text-sm font-semibold text-zinc-900">{invoice.customerSnapshot.name}</p>
-            {invoice.customerSnapshot.phone && (
-              <p className="text-sm text-zinc-700">Phone: {invoice.customerSnapshot.phone}</p>
+            <p className="text-sm font-semibold text-zinc-900">{transaction.customerSnapshot.name}</p>
+            {transaction.customerSnapshot.phone && (
+              <p className="text-sm text-zinc-700">Phone: {transaction.customerSnapshot.phone}</p>
             )}
-            {invoice.customerSnapshot.email && (
-              <p className="text-sm text-zinc-700">Email: {invoice.customerSnapshot.email}</p>
+            {transaction.customerSnapshot.email && (
+              <p className="text-sm text-zinc-700">Email: {transaction.customerSnapshot.email}</p>
             )}
-            {invoice.customerSnapshot.address && (
-              <p className="text-sm text-zinc-700">Address: {invoice.customerSnapshot.address}</p>
+            {transaction.customerSnapshot.address && (
+              <p className="text-sm text-zinc-700">Address: {transaction.customerSnapshot.address}</p>
             )}
           </div>
         )}
@@ -201,7 +238,7 @@ export function InvoiceDetailPage() {
             </label>
             <DropdownSelect
               id="detail-payment-status"
-              value={invoice.status}
+              value={transaction.status}
               onChange={handleStatusChange}
               options={[
                 { value: 'unpaid', label: 'Unpaid' },
@@ -214,45 +251,45 @@ export function InvoiceDetailPage() {
 
           <p className="mb-1 text-xs font-semibold tracking-[0.08em] text-zinc-500 uppercase">Payment Method</p>
           <p className="text-sm font-semibold text-zinc-900">
-            {PAYMENT_METHOD_LABEL[invoice.payment.method]}
+            {PAYMENT_METHOD_LABEL[transaction.payment.method]}
           </p>
 
-          {invoice.payment.method === 'cash' && (
+          {transaction.payment.method === 'cash' && (
             <>
-              <p className="text-sm text-zinc-700">Amount Paid: {currency.format(invoice.payment.amountPaid)}</p>
+              <p className="text-sm text-zinc-700">Amount Paid: {currency.format(transaction.payment.amountPaid)}</p>
               <p className="text-sm text-zinc-700">
-                Change: {currency.format(computeCashChange(invoice.payment.amountPaid, invoice.total))}
+                Change: {currency.format(computeCashChange(transaction.payment.amountPaid, transaction.total))}
               </p>
             </>
           )}
 
-          {invoice.payment.method === 'bank_transfer' && (
+          {transaction.payment.method === 'bank_transfer' && (
             <>
-              {invoice.payment.bankName && (
-                <p className="text-sm text-zinc-700">Bank: {invoice.payment.bankName}</p>
+              {transaction.payment.bankName && (
+                <p className="text-sm text-zinc-700">Bank: {transaction.payment.bankName}</p>
               )}
-              {invoice.payment.accountNumber && (
-                <p className="text-sm text-zinc-700">Account Number: {invoice.payment.accountNumber}</p>
+              {transaction.payment.accountNumber && (
+                <p className="text-sm text-zinc-700">Account Number: {transaction.payment.accountNumber}</p>
               )}
-              {invoice.payment.accountName && (
-                <p className="text-sm text-zinc-700">Account Name: {invoice.payment.accountName}</p>
+              {transaction.payment.accountName && (
+                <p className="text-sm text-zinc-700">Account Name: {transaction.payment.accountName}</p>
               )}
             </>
           )}
 
-          {invoice.payment.method === 'e_wallet' && (
+          {transaction.payment.method === 'e_wallet' && (
             <>
-              {invoice.payment.provider && (
-                <p className="text-sm text-zinc-700">Provider: {invoice.payment.provider}</p>
+              {transaction.payment.provider && (
+                <p className="text-sm text-zinc-700">Provider: {transaction.payment.provider}</p>
               )}
-              {invoice.payment.account && (
-                <p className="text-sm text-zinc-700">Account: {invoice.payment.account}</p>
+              {transaction.payment.account && (
+                <p className="text-sm text-zinc-700">Account: {transaction.payment.account}</p>
               )}
             </>
           )}
 
-          {invoice.payment.method === 'other' && invoice.payment.note && (
-            <p className="text-sm text-zinc-700">Note: {invoice.payment.note}</p>
+          {transaction.payment.method === 'other' && transaction.payment.note && (
+            <p className="text-sm text-zinc-700">Note: {transaction.payment.note}</p>
           )}
         </div>
 
@@ -267,7 +304,7 @@ export function InvoiceDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {invoice.items.map((item) => {
+              {transaction.items.map((item) => {
                 const unitCode = normalizeUnitCode(item.unitCode ?? DEFAULT_UNIT_CODE)
                 const customUnitLabel = normalizeCustomUnitLabel(item.customUnitLabel)
                 const pricingMode = normalizePricingMode(item.pricingMode ?? DEFAULT_PRICING_MODE)
@@ -287,7 +324,7 @@ export function InvoiceDetailPage() {
                       {formatItemRateLabel(currency.format(item.unitPrice), unitCode, customUnitLabel, pricingMode)}
                     </td>
                     <td className="p-2 text-right text-sm font-semibold text-zinc-900">
-                      {currency.format(computeInvoiceLineTotal(item))}
+                      {currency.format(computeTransactionLineTotal(item))}
                     </td>
                   </tr>
                 )
@@ -299,26 +336,26 @@ export function InvoiceDetailPage() {
         <dl className="ml-auto mt-4 w-full max-w-sm border-t border-stone-200 pt-3">
           <div className="flex justify-between py-1 text-sm">
             <dt>Subtotal</dt>
-            <dd>{currency.format(invoice.subtotal)}</dd>
+            <dd>{currency.format(transaction.subtotal)}</dd>
           </div>
 
-          {invoice.discountAmount > 0 && (
+          {transaction.discountAmount > 0 && (
             <div className="flex justify-between py-1 text-sm">
               <dt>Discount</dt>
-              <dd className="text-red-600">-{currency.format(invoice.discountAmount)}</dd>
+              <dd className="text-red-600">-{currency.format(transaction.discountAmount)}</dd>
             </div>
           )}
 
-          {invoice.taxEnabled && (
+          {transaction.taxEnabled && (
             <div className="flex justify-between py-1 text-sm">
-              <dt>Tax ({invoice.taxRate}%)</dt>
-              <dd>{currency.format(invoice.taxAmount)}</dd>
+              <dt>Tax ({transaction.taxRate}%)</dt>
+              <dd>{currency.format(transaction.taxAmount)}</dd>
             </div>
           )}
 
           <div className="mt-1 flex justify-between border-t border-stone-200 pt-2 text-lg font-extrabold">
             <dt>Total</dt>
-            <dd>{currency.format(invoice.total)}</dd>
+            <dd>{currency.format(transaction.total)}</dd>
           </div>
         </dl>
       </Card>

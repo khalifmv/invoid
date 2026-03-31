@@ -11,7 +11,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/invoice', label: 'Invoice', icon: FileText },
+  { to: '/transaction', label: 'Transaction', icon: FileText },
   { to: '/catalog', label: 'Catalog', icon: Package },
   { to: '/customers', label: 'Customers', icon: Users },
   { to: '/history', label: 'History', icon: Clock },

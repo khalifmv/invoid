@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { Card, CardTitle } from '../components/ui/Card'
 import { createCurrencyFormatter } from '../lib/currency'
-import { useInvoiceStore } from '../store/invoiceStore'
+import { useTransactionStore } from '../store/transactionStore'
 import { useSettingsStore } from '../store/settingsStore'
 import {
     Chart as ChartJS,
@@ -20,23 +20,23 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 
 export function DashboardPage() {
     const currencyCode = useSettingsStore((state) => state.currency)
-    const { historyInvoices, loadInvoices } = useInvoiceStore()
+    const { historyTransactions, loadTransactions } = useTransactionStore()
 
     useEffect(() => {
-        void loadInvoices()
-    }, [loadInvoices])
+        void loadTransactions()
+    }, [loadTransactions])
 
     const currency = useMemo(() => createCurrencyFormatter(currencyCode), [currencyCode])
 
     const totalRevenue = useMemo(
-        () => historyInvoices.filter((i) => i.status === 'paid').reduce((sum, inv) => sum + inv.total, 0),
-        [historyInvoices],
+        () => historyTransactions.filter((i) => i.status === 'paid').reduce((sum, inv) => sum + inv.total, 0),
+        [historyTransactions],
     )
     const outstandingRevenue = useMemo(
-        () => historyInvoices.filter((i) => i.status !== 'paid').reduce((sum, inv) => sum + inv.total, 0),
-        [historyInvoices],
+        () => historyTransactions.filter((i) => i.status !== 'paid').reduce((sum, inv) => sum + inv.total, 0),
+        [historyTransactions],
     )
-    const totalInvoices = historyInvoices.length
+    const totalTransactions = historyTransactions.length
 
     const chartData = useMemo(() => {
         const dates: Record<string, number> = {}
@@ -49,7 +49,7 @@ export function DashboardPage() {
             dates[dateString] = 0
         }
 
-        historyInvoices.forEach((inv) => {
+        historyTransactions.forEach((inv) => {
             const invDate = new Date(inv.createdAt).toISOString().split('T')[0]
             if (dates[invDate] !== undefined && inv.status === 'paid') {
                 dates[invDate] += inv.total
@@ -75,7 +75,7 @@ export function DashboardPage() {
                 },
             ],
         }
-    }, [historyInvoices])
+    }, [historyTransactions])
 
     const chartOptions = {
         responsive: true,
@@ -104,8 +104,8 @@ export function DashboardPage() {
                     <p className="mt-2 text-3xl font-bold text-red-600">{currency.format(outstandingRevenue)}</p>
                 </Card>
                 <Card>
-                    <CardTitle>Total Invoices</CardTitle>
-                    <p className="mt-2 text-3xl font-bold text-zinc-900">{totalInvoices}</p>
+                    <CardTitle>Total Transactions</CardTitle>
+                    <p className="mt-2 text-3xl font-bold text-zinc-900">{totalTransactions}</p>
                 </Card>
             </div>
 

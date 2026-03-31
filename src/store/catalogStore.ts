@@ -26,6 +26,9 @@ interface CatalogActions {
     defaultPricingMode?: PricingMode,
     description?: string,
     mediaDrafts?: ProductMediaDraft[],
+    isAvailable?: boolean,
+    hasUnlimitedStock?: boolean,
+    stock?: number,
   ) => Promise<void>
   updateProduct: (
     productId: string,
@@ -37,7 +40,11 @@ interface CatalogActions {
     defaultPricingMode?: PricingMode,
     description?: string,
     mediaDrafts?: ProductMediaDraft[],
+    isAvailable?: boolean,
+    hasUnlimitedStock?: boolean,
+    stock?: number,
   ) => Promise<void>
+  updateProductAvailability: (productId: string, isAvailable: boolean) => Promise<void>
   deleteProduct: (productId: string) => Promise<void>
 }
 
@@ -133,6 +140,9 @@ export const useCatalogStore = create<CatalogStore>((set, get) => ({
     defaultPricingMode = DEFAULT_PRICING_MODE,
     description = '',
     mediaDrafts = [],
+    isAvailable = true,
+    hasUnlimitedStock = true,
+    stock = 0,
   ) => {
     const normalizedName = name.trim()
     if (normalizedName.length === 0) {
@@ -153,6 +163,9 @@ export const useCatalogStore = create<CatalogStore>((set, get) => ({
       defaultUnitCode: normalizeUnitCode(defaultUnitCode),
       defaultCustomUnitLabel: defaultCustomUnitLabel.trim(),
       defaultPricingMode: normalizePricingMode(defaultPricingMode),
+      isAvailable,
+      hasUnlimitedStock,
+      stock: Math.max(0, stock),
       createdAt: timestamp,
       updatedAt: timestamp,
     }
@@ -192,6 +205,9 @@ export const useCatalogStore = create<CatalogStore>((set, get) => ({
     defaultPricingMode,
     description,
     mediaDrafts,
+    isAvailable,
+    hasUnlimitedStock,
+    stock,
   ) => {
     const normalizedName = name.trim()
     if (normalizedName.length === 0) {
@@ -218,6 +234,9 @@ export const useCatalogStore = create<CatalogStore>((set, get) => ({
       defaultPricingMode: normalizePricingMode(
         defaultPricingMode ?? existing.defaultPricingMode ?? DEFAULT_PRICING_MODE,
       ),
+      isAvailable: isAvailable ?? existing.isAvailable ?? true,
+      hasUnlimitedStock: hasUnlimitedStock ?? existing.hasUnlimitedStock ?? true,
+      stock: stock !== undefined ? Math.max(0, stock) : (existing.stock ?? 0),
       updatedAt: timestamp,
     }
 
@@ -252,6 +271,18 @@ export const useCatalogStore = create<CatalogStore>((set, get) => ({
 
         await db.productMedia.bulkAdd(mediaRecords)
       }
+    })
+
+    await get().hydrate()
+  },
+
+  updateProductAvailability: async (productId, isAvailable) => {
+    const existing = await db.products.get(productId)
+    if (!existing) return
+
+    await db.products.update(productId, {
+      isAvailable,
+      updatedAt: nowIso()
     })
 
     await get().hydrate()

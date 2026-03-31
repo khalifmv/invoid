@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts } from 'pdf-lib'
-import type { CurrencyCode, Invoice, PaymentMethod } from '../../types'
-import { computeCashChange, computeInvoiceLineTotal } from '../invoice-calculations'
+import type { CurrencyCode, PaymentMethod, Transaction } from '../../types'
+import { computeCashChange, computeTransactionLineTotal } from '../transaction-calculations'
 import {
   DEFAULT_PRICING_MODE,
   DEFAULT_UNIT_CODE,
@@ -30,31 +30,33 @@ const PAYMENT_LABEL: Record<PaymentMethod, string> = {
   other: 'Other',
 }
 
-const toPaymentDetails = (invoice: Invoice): string => {
-  switch (invoice.payment.method) {
+const toPaymentDetails = (transaction: Transaction): string => {
+  switch (transaction.payment.method) {
     case 'cash':
       return ''
     case 'bank_transfer': {
       const details = [
-        invoice.payment.bankName,
-        invoice.payment.accountNumber,
-        invoice.payment.accountName,
+        transaction.payment.bankName,
+        transaction.payment.accountNumber,
+        transaction.payment.accountName,
       ].filter((entry) => entry.trim().length > 0)
       return details.join(' | ')
     }
     case 'e_wallet': {
-      const details = [invoice.payment.provider, invoice.payment.account].filter(
+      const details = [transaction.payment.provider, transaction.payment.account].filter(
         (entry) => entry.trim().length > 0,
       )
       return details.join(' | ')
     }
     case 'other':
-      return invoice.payment.note
+      return transaction.payment.note
+    default:
+      return ''
   }
 }
 
 const createRenderModel = (
-  invoice: Invoice,
+  transaction: Transaction,
   businessName: string,
   currencyCode: CurrencyCode,
   logoDataUrl: string | null | undefined,
@@ -70,7 +72,7 @@ const createRenderModel = (
     dateStyle: 'medium',
   })
 
-  const items = invoice.items.map((item) => {
+  const items = transaction.items.map((item) => {
     const unitCode = normalizeUnitCode(item.unitCode ?? DEFAULT_UNIT_CODE)
     const customUnitLabel = normalizeCustomUnitLabel(item.customUnitLabel)
     const pricingMode = normalizePricingMode(item.pricingMode ?? DEFAULT_PRICING_MODE)
@@ -84,14 +86,15 @@ const createRenderModel = (
         pricingMode,
       ),
       price: formatItemRateLabel(currency.format(item.unitPrice), unitCode, customUnitLabel, pricingMode),
-      total: currency.format(computeInvoiceLineTotal(item)),
+      total: currency.format(computeTransactionLineTotal(item)),
     }
   })
 
-  const paymentAmountPaid = invoice.payment.method === 'cash' ? currency.format(invoice.payment.amountPaid) : ''
+  const paymentAmountPaid =
+    transaction.payment.method === 'cash' ? currency.format(transaction.payment.amountPaid) : ''
   const paymentChange =
-    invoice.payment.method === 'cash'
-      ? currency.format(computeCashChange(invoice.payment.amountPaid, invoice.total))
+    transaction.payment.method === 'cash'
+      ? currency.format(computeCashChange(transaction.payment.amountPaid, transaction.total))
       : ''
 
   return {
@@ -100,26 +103,27 @@ const createRenderModel = (
       logoDataUrl: logoDataUrl ?? '',
     },
     invoice: {
-      id: invoice.id,
-      date: dateFormatter.format(new Date(invoice.createdAt)),
+      id: transaction.id,
+      date: dateFormatter.format(new Date(transaction.createdAt)),
     },
     customer: {
-      name: invoice.customerSnapshot?.name ?? '',
-      address: invoice.customerSnapshot?.address ?? '',
-      phone: invoice.customerSnapshot?.phone ?? '',
-      email: invoice.customerSnapshot?.email ?? '',
+      name: transaction.customerSnapshot?.name ?? '',
+      address: transaction.customerSnapshot?.address ?? '',
+      phone: transaction.customerSnapshot?.phone ?? '',
+      email: transaction.customerSnapshot?.email ?? '',
     },
     payment: {
-      methodLabel: PAYMENT_LABEL[invoice.payment.method],
+      methodLabel: PAYMENT_LABEL[transaction.payment.method],
       amountPaidFormatted: paymentAmountPaid,
       changeFormatted: paymentChange,
-      details: toPaymentDetails(invoice),
+      details: toPaymentDetails(transaction),
     },
     summary: {
-      subtotalFormatted: currency.format(invoice.subtotal),
-      discountFormatted: invoice.discountAmount > 0 ? `-${currency.format(invoice.discountAmount)}` : '',
-      taxFormatted: invoice.taxEnabled ? currency.format(invoice.taxAmount) : '',
-      totalFormatted: currency.format(invoice.total),
+      subtotalFormatted: currency.format(transaction.subtotal),
+      discountFormatted:
+        transaction.discountAmount > 0 ? `-${currency.format(transaction.discountAmount)}` : '',
+      taxFormatted: transaction.taxEnabled ? currency.format(transaction.taxAmount) : '',
+      totalFormatted: currency.format(transaction.total),
     },
     items,
   }
@@ -264,7 +268,7 @@ const renderPaginatedTableBlock = (
 }
 
 export interface PdfRenderData {
-  invoice: Invoice
+  invoice: Transaction
   businessName: string
   currencyCode: CurrencyCode
   logoDataUrl?: string | null

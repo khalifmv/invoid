@@ -1,4 +1,4 @@
-import type { DiscountType, InvoiceItem, InvoiceTotals } from '../types'
+import type { DiscountType, TransactionItem, TransactionTotals } from '../types'
 import { normalizePricingMode } from './item-semantics'
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -14,7 +14,7 @@ const sanitizeNumber = (value: number): number => {
 
 const round2 = (value: number): number => Math.round(value * 100) / 100
 
-export const computeInvoiceLineTotal = (item: InvoiceItem): number => {
+export const computeTransactionLineTotal = (item: TransactionItem): number => {
   const normalizedPricingMode = normalizePricingMode(item.pricingMode)
   const unitPrice = Math.max(0, sanitizeNumber(item.unitPrice))
 
@@ -26,10 +26,10 @@ export const computeInvoiceLineTotal = (item: InvoiceItem): number => {
   return round2(quantity * unitPrice)
 }
 
-export const computeSubtotal = (items: InvoiceItem[]): number => {
+export const computeSubtotal = (items: TransactionItem[]): number => {
   return round2(
     items.reduce((accumulator, item) => {
-      return accumulator + computeInvoiceLineTotal(item)
+      return accumulator + computeTransactionLineTotal(item)
     }, 0),
   )
 }
@@ -50,13 +50,13 @@ export const computeDiscountAmount = (
   return round2(clamp(normalizedDiscount, 0, normalizedSubtotal))
 }
 
-export const computeInvoiceTotals = (
-  items: InvoiceItem[],
+export const computeTransactionTotals = (
+  items: TransactionItem[],
   discountType: DiscountType,
   discountValue: number,
   taxEnabled: boolean,
   taxRate: number,
-): InvoiceTotals => {
+): TransactionTotals => {
   const subtotal = computeSubtotal(items)
   const discountAmount = computeDiscountAmount(subtotal, discountType, discountValue)
   const taxableAmount = round2(Math.max(0, subtotal - discountAmount))

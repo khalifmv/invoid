@@ -1,7 +1,7 @@
 {
-  "id": "default_v1",
-  "name": "Default Invoice",
-  "docType": "invoice",
+  "id": "receipt_v1",
+  "name": "Simple Receipt",
+  "docType": "receipt",
   "page": {
     "size": "A4",
     "margin": 40
@@ -27,9 +27,9 @@
       "id": "header",
       "position": { "x": 40, "y": 790 },
       "content": {
-        "title": "INVOICE",
+        "title": "RECEIPT",
         "businessName": "{{business.name}}",
-        "invoiceId": "Invoice #: {{invoice.id}}",
+        "invoiceId": "Receipt #: {{invoice.id}}",
         "date": "Date: {{invoice.date}}"
       }
     },
@@ -37,36 +37,20 @@
       "type": "customer",
       "id": "customer",
       "position": { "x": 40, "y": 710 },
-      "width": 250,
-      "height": 74,
+      "width": 515,
+      "height": 58,
       "padding": 10,
       "content": {
-        "title": "Bill To",
+        "title": "Received From",
         "name": "{{customer.name}}",
-        "address": "{{customer.address}}",
         "phone": "{{customer.phone}}",
         "email": "{{customer.email}}"
       }
     },
     {
-      "type": "payment",
-      "id": "payment",
-      "position": { "x": 305, "y": 710 },
-      "width": 250,
-      "height": 74,
-      "padding": 10,
-      "content": {
-        "title": "Payment",
-        "method": "{{payment.methodLabel}}",
-        "amountPaid": "{{payment.amountPaidFormatted}}",
-        "change": "{{payment.changeFormatted}}",
-        "details": "{{payment.details}}"
-      }
-    },
-    {
       "type": "table",
       "id": "items",
-      "position": { "x": 40, "y": 612 },
+      "position": { "x": 40, "y": 620 },
       "rowHeight": 28,
       "columns": [
         { "key": "name", "label": "Item", "width": 180, "align": "left" },

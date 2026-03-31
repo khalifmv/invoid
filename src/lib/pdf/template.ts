@@ -1,3 +1,5 @@
+import type { PdfDocType } from '../../types'
+
 export type PdfPageSize = 'A4'
 export type PdfFontFamily = 'Helvetica' | 'TimesRoman' | 'Courier'
 
@@ -94,6 +96,7 @@ export type PdfTemplateBlock =
 export interface PdfTemplate {
   id: string
   name: string
+  docType?: PdfDocType
   page: {
     size: PdfPageSize
     margin: number
@@ -107,21 +110,41 @@ export interface PdfTemplate {
 }
 
 const DEFAULT_TEMPLATE_URL = new URL('./templates/default.json', import.meta.url)
+const RECEIPT_TEMPLATE_URL = new URL('./templates/receipt.json', import.meta.url)
 
-export const loadDefaultPdfTemplate = async (): Promise<PdfTemplate> => {
-  const response = await fetch(DEFAULT_TEMPLATE_URL)
+const TEMPLATE_URLS: Record<PdfDocType, URL> = {
+  invoice: DEFAULT_TEMPLATE_URL,
+  receipt: RECEIPT_TEMPLATE_URL,
+}
+
+const loadTemplateFromUrl = async (templateUrl: URL, label: string): Promise<PdfTemplate> => {
+  const response = await fetch(templateUrl)
   if (!response.ok) {
-    throw new Error('Failed to load default PDF template.')
+    throw new Error(`Failed to load ${label}.`)
   }
 
   const template = (await response.json()) as PdfTemplate
   const validationErrors = validatePdfTemplate(template)
 
   if (validationErrors.length > 0) {
-    throw new Error(`Default template is invalid: ${validationErrors.join(' ')}`)
+    throw new Error(`${label} is invalid: ${validationErrors.join(' ')}`)
   }
 
   return template
+}
+
+export const selectPdfTemplate = async (docType: PdfDocType = 'invoice'): Promise<PdfTemplate> => {
+  const template = await loadTemplateFromUrl(TEMPLATE_URLS[docType], `${docType} PDF template`)
+
+  if (template.docType && template.docType !== docType) {
+    throw new Error(`Template type mismatch: expected ${docType}, got ${template.docType}.`)
+  }
+
+  return template
+}
+
+export const loadDefaultPdfTemplate = async (): Promise<PdfTemplate> => {
+  return selectPdfTemplate('invoice')
 }
 
 export const validatePdfTemplate = (template: PdfTemplate): string[] => {
@@ -137,6 +160,14 @@ export const validatePdfTemplate = (template: PdfTemplate): string[] => {
 
   if (!Number.isFinite(template.styles.fontSize) || template.styles.fontSize <= 0) {
     errors.push('Template font size must be greater than zero.')
+  }
+
+  if (
+    typeof template.docType !== 'undefined' &&
+    template.docType !== 'invoice' &&
+    template.docType !== 'receipt'
+  ) {
+    errors.push('Template docType must be either "invoice" or "receipt".')
   }
 
   const blockTypes = new Set(template.blocks.map((block) => block.type))

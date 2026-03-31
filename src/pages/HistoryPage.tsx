@@ -4,13 +4,13 @@ import { Card, CardTitle } from '../components/ui/Card'
 import { DropdownSelect } from '../components/ui/DropdownSelect'
 import { Input } from '../components/ui/Input'
 import { createCurrencyFormatter } from '../lib/currency'
-import { useInvoiceStore } from '../store/invoiceStore'
+import { useTransactionStore } from '../store/transactionStore'
 import { useSettingsStore } from '../store/settingsStore'
 import type { PaymentStatus } from '../types'
 
 export function HistoryPage() {
   const currencyCode = useSettingsStore((state) => state.currency)
-  const { historyInvoices, isHistoryLoading, historyErrorMessage, loadInvoices } = useInvoiceStore()
+  const { historyTransactions, isHistoryLoading, historyErrorMessage, loadTransactions } = useTransactionStore()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | PaymentStatus>('all')
@@ -18,8 +18,8 @@ export function HistoryPage() {
   const [amountSort, setAmountSort] = useState<'none' | 'asc' | 'desc'>('none')
 
   useEffect(() => {
-    void loadInvoices()
-  }, [loadInvoices])
+    void loadTransactions()
+  }, [loadTransactions])
 
   const currency = useMemo(
     () => createCurrencyFormatter(currencyCode),
@@ -35,8 +35,8 @@ export function HistoryPage() {
     [],
   )
 
-  const processedInvoices = useMemo(() => {
-    let result = [...historyInvoices]
+  const processedTransactions = useMemo(() => {
+    let result = [...historyTransactions]
 
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase()
@@ -56,17 +56,17 @@ export function HistoryPage() {
     })
 
     return result
-  }, [historyInvoices, searchQuery, statusFilter, dateSort, amountSort])
+  }, [historyTransactions, searchQuery, statusFilter, dateSort, amountSort])
 
   return (
     <section className="mx-auto w-full">
       <Card>
         <CardTitle>History</CardTitle>
 
-        {isHistoryLoading && <p className="text-sm text-zinc-400">Loading invoices...</p>}
+        {isHistoryLoading && <p className="text-sm text-zinc-400">Loading transactions...</p>}
         {historyErrorMessage && <p className="text-sm text-red-600">{historyErrorMessage}</p>}
 
-        {historyInvoices.length > 0 && (
+        {historyTransactions.length > 0 && (
           <div className="my-4 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
             <Input
               placeholder="Search customer..."
@@ -103,21 +103,21 @@ export function HistoryPage() {
           </div>
         )}
 
-        {!isHistoryLoading && historyInvoices.length === 0 && (
+        {!isHistoryLoading && historyTransactions.length === 0 && (
           <p className="py-2 text-sm text-zinc-400">
-            No saved invoices yet. Build your first invoice, then export to store it here.
+            No saved transactions yet. Build your first transaction, then export to store it here.
           </p>
         )}
 
-        {!isHistoryLoading && historyInvoices.length > 0 && processedInvoices.length === 0 && (
+        {!isHistoryLoading && historyTransactions.length > 0 && processedTransactions.length === 0 && (
           <p className="py-2 text-sm text-zinc-400">
-            No invoices match the current filters.
+            No transactions match the current filters.
           </p>
         )}
 
-        {processedInvoices.length > 0 && (
+        {processedTransactions.length > 0 && (
           <div className="grid gap-2 border-t border-stone-200 pt-3">
-            {processedInvoices.map((invoice) => (
+            {processedTransactions.map((invoice) => (
               <article
                 className="flex items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2"
                 key={invoice.id}

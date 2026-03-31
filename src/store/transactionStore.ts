@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { db } from '../lib/db'
 import { nowIso } from '../lib/date'
-import { computeInvoiceTotals } from '../lib/invoice-calculations'
+import { computeTransactionTotals } from '../lib/transaction-calculations'
 import { generateId } from '../lib/ids'
 import {
   DEFAULT_PRICING_MODE,
@@ -17,9 +17,9 @@ import type {
   CustomerSnapshot,
   EWalletPayment,
   DiscountType,
-  Invoice,
-  InvoiceItem,
-  InvoiceTotals,
+  Transaction,
+  TransactionItem,
+  TransactionTotals,
   Payment,
   PaymentMethod,
   PaymentStatus,
@@ -29,8 +29,8 @@ import type {
 } from '../types'
 import { useSettingsStore } from './settingsStore'
 
-interface InvoiceState {
-  items: InvoiceItem[]
+interface TransactionState {
+  items: TransactionItem[]
   customerId: string | null
   customerSnapshot: CustomerSnapshot | null
   payment: Payment
@@ -39,12 +39,12 @@ interface InvoiceState {
   taxEnabled: boolean
   taxRate: number
   status: PaymentStatus
-  historyInvoices: Invoice[]
+  historyTransactions: Transaction[]
   isHistoryLoading: boolean
   historyErrorMessage: string | null
 }
 
-interface InvoiceActions {
+interface TransactionActions {
   addItemFromProduct: (product: Product) => void
   addManualItem: () => void
   addCustomItem: (data: {
@@ -57,7 +57,7 @@ interface InvoiceActions {
   updateItem: (
     itemId: string,
     patch: Partial<
-      Pick<InvoiceItem, 'name' | 'quantity' | 'unitPrice' | 'unitCode' | 'customUnitLabel' | 'pricingMode'>
+      Pick<TransactionItem, 'name' | 'quantity' | 'unitPrice' | 'unitCode' | 'customUnitLabel' | 'pricingMode'>
     >,
   ) => void
   removeItem: (itemId: string) => void
@@ -72,22 +72,22 @@ interface InvoiceActions {
   setCustomer: (customerId: string | null) => Promise<void>
   setTaxEnabled: (enabled: boolean) => void
   setTaxRate: (value: number) => void
-  saveInvoice: () => Promise<Invoice | null>
-  clearInvoice: () => void
-  loadInvoices: () => Promise<void>
-  getInvoiceById: (invoiceId: string) => Promise<Invoice | null>
+  saveTransaction: () => Promise<Transaction | null>
+  clearTransaction: () => void
+  loadTransactions: () => Promise<void>
+  getTransactionById: (transactionId: string) => Promise<Transaction | null>
 }
 
-export type InvoiceStore = InvoiceState & InvoiceActions
+export type TransactionStore = TransactionState & TransactionActions
 
-type StoredInvoice = Invoice & {
+type StoredTransaction = Transaction & {
   customerId?: string | null
   customerSnapshot?: CustomerSnapshot | null
   status?: PaymentStatus
   payment?: Payment
 }
 
-const normalizeInvoiceItem = (item: InvoiceItem): InvoiceItem => {
+const normalizeTransactionItem = (item: TransactionItem): TransactionItem => {
   const unitCode = normalizeUnitCode(item.unitCode)
   const customUnitLabel = normalizeCustomUnitLabel(item.customUnitLabel)
   const pricingMode = normalizePricingMode(item.pricingMode)
@@ -184,19 +184,19 @@ const sanitizePayment = (payment: Payment): Payment => {
   }
 }
 
-const normalizeStoredInvoice = (invoice: StoredInvoice): Invoice => {
+const normalizeStoredTransaction = (transaction: StoredTransaction): Transaction => {
   return {
-    ...invoice,
-    items: invoice.items.map((item) => normalizeInvoiceItem(item)),
-    customerId: invoice.customerId ?? null,
-    customerSnapshot: invoice.customerSnapshot ?? null,
-    status: invoice.status ?? 'paid',
-    payment: invoice.payment ? sanitizePayment(invoice.payment) : createDefaultPayment(),
+    ...transaction,
+    items: transaction.items.map((item) => normalizeTransactionItem(item)),
+    customerId: transaction.customerId ?? null,
+    customerSnapshot: transaction.customerSnapshot ?? null,
+    status: transaction.status ?? 'paid',
+    payment: transaction.payment ? sanitizePayment(transaction.payment) : createDefaultPayment(),
   }
 }
 
-const createInitialInvoiceState = (): Pick<
-  InvoiceState,
+const createInitialTransactionState = (): Pick<
+  TransactionState,
   | 'items'
   | 'customerId'
   | 'customerSnapshot'
@@ -222,9 +222,9 @@ const createInitialInvoiceState = (): Pick<
   }
 }
 
-export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
-  ...createInitialInvoiceState(),
-  historyInvoices: [],
+export const useTransactionStore = create<TransactionStore>((set, get) => ({
+  ...createInitialTransactionState(),
+  historyTransactions: [],
   isHistoryLoading: false,
   historyErrorMessage: null,
 
@@ -286,12 +286,12 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
           return item
         }
 
-        const mergedItem: InvoiceItem = {
+        const mergedItem: TransactionItem = {
           ...item,
           ...patch,
         }
 
-        return normalizeInvoiceItem(mergedItem)
+        return normalizeTransactionItem(mergedItem)
       }),
     }))
   },
@@ -386,13 +386,13 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
   setTaxEnabled: (enabled) => set({ taxEnabled: enabled }),
   setTaxRate: (value) => set({ taxRate: Number.isFinite(value) ? value : 0 }),
 
-  saveInvoice: async () => {
+  saveTransaction: async () => {
     const state = get()
     if (state.items.length === 0) {
       return null
     }
 
-    const totals = computeInvoiceTotals(
+    const totals = computeTransactionTotals(
       state.items,
       state.discountType,
       state.discountValue,
@@ -410,11 +410,11 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
       ? toCustomerSnapshot(latestCustomer)
       : state.customerSnapshot
 
-    const invoice: Invoice = {
+    const transaction: Transaction = {
       id: generateId(),
       createdAt: timestamp,
       updatedAt: timestamp,
-      items: state.items.map((item) => normalizeInvoiceItem(item)),
+      items: state.items.map((item) => normalizeTransactionItem(item)),
       customerId: state.customerId,
       customerSnapshot: resolvedCustomerSnapshot,
       status: state.status,
@@ -430,15 +430,15 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
       notes: '',
     }
 
-    await db.invoices.add(invoice)
+    await db.transactions.add(transaction)
     set((current) => ({
-      historyInvoices: [invoice, ...current.historyInvoices],
+      historyTransactions: [transaction, ...current.historyTransactions],
     }))
 
-    return invoice
+    return transaction
   },
 
-  clearInvoice: () => {
+  clearTransaction: () => {
     const defaults = getTaxDefaults()
     set({
       items: [],
@@ -453,43 +453,43 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
     })
   },
 
-  loadInvoices: async () => {
+  loadTransactions: async () => {
     set({ isHistoryLoading: true, historyErrorMessage: null })
 
     try {
-      const invoices = (await db.invoices.toArray()).map((invoice) =>
-        normalizeStoredInvoice(invoice as StoredInvoice),
+      const transactions = (await db.transactions.toArray()).map((transaction) =>
+        normalizeStoredTransaction(transaction as StoredTransaction),
       )
-      invoices.sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      transactions.sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       set({
-        historyInvoices: invoices,
+        historyTransactions: transactions,
         isHistoryLoading: false,
       })
     } catch {
       set({
         isHistoryLoading: false,
-        historyErrorMessage: 'Failed to load invoice history from IndexedDB.',
+        historyErrorMessage: 'Failed to load transaction history from IndexedDB.',
       })
     }
   },
 
-  getInvoiceById: async (invoiceId) => {
-    const inMemory = get().historyInvoices.find((invoice) => invoice.id === invoiceId)
+  getTransactionById: async (transactionId) => {
+    const inMemory = get().historyTransactions.find((transaction) => transaction.id === transactionId)
     if (inMemory) {
       return inMemory
     }
 
     try {
-      const invoice = await db.invoices.get(invoiceId)
-      return invoice ? normalizeStoredInvoice(invoice as StoredInvoice) : null
+      const transaction = await db.transactions.get(transactionId)
+      return transaction ? normalizeStoredTransaction(transaction as StoredTransaction) : null
     } catch {
       return null
     }
   },
 }))
 
-export const selectInvoiceTotals = (state: InvoiceStore): InvoiceTotals => {
-  return computeInvoiceTotals(
+export const selectTransactionTotals = (state: TransactionStore): TransactionTotals => {
+  return computeTransactionTotals(
     state.items,
     state.discountType,
     state.discountValue,

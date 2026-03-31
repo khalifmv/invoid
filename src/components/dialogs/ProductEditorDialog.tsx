@@ -23,6 +23,7 @@ import { Dialog } from '../ui/Dialog'
 import { DropdownSelect, type DropdownOption } from '../ui/DropdownSelect'
 import { Input } from '../ui/Input'
 import { NumberInput } from '../ui/NumberInput'
+import { Toggle } from '../ui/Toggle'
 import {
     DEFAULT_PRICING_MODE,
     DEFAULT_UNIT_CODE,
@@ -47,6 +48,9 @@ export interface ProductFormData {
     customUnitLabel: string
     pricingMode: PricingMode
     mediaDrafts?: ProductMediaDraft[]
+    isAvailable: boolean
+    hasUnlimitedStock: boolean
+    stock: number
 }
 
 export interface ProductEditorInitialData {
@@ -58,6 +62,9 @@ export interface ProductEditorInitialData {
     customUnitLabel?: string
     pricingMode?: PricingMode
     mediaDrafts?: ProductMediaDraft[]
+    isAvailable?: boolean
+    hasUnlimitedStock?: boolean
+    stock?: number
 }
 
 interface ProductEditorDialogProps {
@@ -193,6 +200,9 @@ export function ProductEditorDialog({
     const [customUnitLabel, setCustomUnitLabel] = useState('')
     const [pricingMode, setPricingMode] = useState<PricingMode>(DEFAULT_PRICING_MODE)
     const [mediaDrafts, setMediaDrafts] = useState<ProductMediaDraft[]>([])
+    const [isAvailable, setIsAvailable] = useState(true)
+    const [hasUnlimitedStock, setHasUnlimitedStock] = useState(true)
+    const [stock, setStock] = useState(0)
     const [mediaErrorMessage, setMediaErrorMessage] = useState<string | null>(null)
     const [isProcessingMedia, setIsProcessingMedia] = useState(false)
 
@@ -206,6 +216,9 @@ export function ProductEditorDialog({
             setCustomUnitLabel(initialData?.customUnitLabel ?? '')
             setPricingMode(normalizePricingMode(initialData?.pricingMode ?? DEFAULT_PRICING_MODE))
             setMediaDrafts(normalizeMediaDrafts(initialData?.mediaDrafts ?? []))
+            setIsAvailable(initialData?.isAvailable ?? true)
+            setHasUnlimitedStock(initialData?.hasUnlimitedStock ?? true)
+            setStock(initialData?.stock ?? 0)
             setMediaErrorMessage(null)
             setIsProcessingMedia(false)
         }
@@ -225,6 +238,9 @@ export function ProductEditorDialog({
             customUnitLabel,
             pricingMode,
             mediaDrafts: showMedia ? mediaDrafts : undefined,
+            isAvailable,
+            hasUnlimitedStock,
+            stock,
         })
     }
 
@@ -412,6 +428,44 @@ export function ProductEditorDialog({
                     />
                 </div>
             )}
+
+            <div className="grid grid-cols-2 gap-2 mt-1">
+                <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
+                    <div className="mb-3 flex items-center justify-between">
+                        <label htmlFor={`${idPrefix}-available`} className="text-xs font-semibold text-zinc-600">
+                            Available for Sale
+                        </label>
+                        <Toggle
+                            id={`${idPrefix}-available`}
+                            checked={isAvailable}
+                            onChange={(event) => setIsAvailable(event.target.checked)}
+                        />
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <label htmlFor={`${idPrefix}-unlimited`} className="text-xs font-semibold text-zinc-600">
+                            Unlimited Stock
+                        </label>
+                        <Toggle
+                            id={`${idPrefix}-unlimited`}
+                            checked={hasUnlimitedStock}
+                            onChange={(event) => setHasUnlimitedStock(event.target.checked)}
+                            disabled={!isAvailable}
+                        />
+                    </div>
+                </div>
+
+                <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
+                    <label className="mb-1 block text-xs font-semibold text-zinc-600">
+                        Stock Quantity
+                    </label>
+                    <NumberInput
+                        min={0}
+                        value={stock}
+                        onValueChange={setStock}
+                        disabled={!isAvailable || hasUnlimitedStock}
+                    />
+                </div>
+            </div>
         </>
     )
 

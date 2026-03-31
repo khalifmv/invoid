@@ -32,7 +32,7 @@ export interface OtherPayment {
 
 export type Payment = CashPayment | BankTransferPayment | EWalletPayment | OtherPayment
 
-export interface InvoiceItem {
+export interface TransactionItem {
   id: EntityId
   productId: EntityId | null
   name: string
@@ -43,8 +43,8 @@ export interface InvoiceItem {
   unitPrice: number
 }
 
-export interface InvoiceDraft {
-  items: InvoiceItem[]
+export interface TransactionDraft {
+  items: TransactionItem[]
   customerId: EntityId | null
   customerSnapshot: CustomerSnapshot | null
   status: PaymentStatus
@@ -56,11 +56,11 @@ export interface InvoiceDraft {
   notes: string
 }
 
-export interface Invoice {
+export interface Transaction {
   id: EntityId
   createdAt: Timestamp
   updatedAt: Timestamp
-  items: InvoiceItem[]
+  items: TransactionItem[]
   customerId: EntityId | null
   customerSnapshot: CustomerSnapshot | null
   status: PaymentStatus
@@ -76,7 +76,7 @@ export interface Invoice {
   notes: string
 }
 
-export interface InvoiceTotals {
+export interface TransactionTotals {
   subtotal: number
   discountAmount: number
   taxableAmount: number

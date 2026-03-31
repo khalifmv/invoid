@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { AppSettings, CurrencyCode } from '../types'
+import type { AppSettings, CurrencyCode, PdfDocType } from '../types'
 
 const DEFAULT_SETTINGS: AppSettings = {
   defaultTaxEnabled: true,
@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   businessName: '',
   logoDataUrl: null,
   currency: 'IDR',
+  lastPdfDocType: 'invoice',
 }
 
 interface SettingsActions {
@@ -16,6 +17,7 @@ interface SettingsActions {
   setDefaultTaxEnabled: (enabled: boolean) => void
   setDefaultTaxRate: (rate: number) => void
   setCurrency: (currency: CurrencyCode) => void
+  setLastPdfDocType: (docType: PdfDocType) => void
   resetSettings: () => void
 }
 
@@ -39,6 +41,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setDefaultTaxEnabled: (defaultTaxEnabled) => set({ defaultTaxEnabled }),
       setDefaultTaxRate: (defaultTaxRate) => set({ defaultTaxRate: sanitizeTaxRate(defaultTaxRate) }),
       setCurrency: (currency) => set({ currency }),
+      setLastPdfDocType: (lastPdfDocType) => set({ lastPdfDocType }),
       resetSettings: () => set(DEFAULT_SETTINGS),
     }),
     {

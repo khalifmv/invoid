@@ -10,6 +10,7 @@ import { Button } from '../components/ui/Button'
 import { Card, CardTitle } from '../components/ui/Card'
 import type { DropdownOption } from '../components/ui/DropdownSelect'
 import { Input } from '../components/ui/Input'
+import { Toggle } from '../components/ui/Toggle'
 import { createCurrencyFormatter } from '../lib/currency'
 import {
   DEFAULT_PRICING_MODE,
@@ -34,6 +35,9 @@ const toEditInitialData = (product: Product, mediaDrafts: ProductMediaDraft[]): 
   customUnitLabel: normalizeCustomUnitLabel(product.defaultCustomUnitLabel),
   pricingMode: normalizePricingMode(product.defaultPricingMode ?? DEFAULT_PRICING_MODE),
   mediaDrafts,
+  isAvailable: product.isAvailable,
+  hasUnlimitedStock: product.hasUnlimitedStock,
+  stock: product.stock,
 })
 
 export function CatalogPage() {
@@ -47,6 +51,7 @@ export function CatalogPage() {
     createCategory,
     createProduct,
     updateProduct,
+    updateProductAvailability,
     deleteProduct,
   } = useCatalogStore()
 
@@ -142,6 +147,9 @@ export function CatalogPage() {
       data.pricingMode,
       data.description,
       data.mediaDrafts,
+      data.isAvailable,
+      data.hasUnlimitedStock,
+      data.stock,
     )
     setIsNewProductDialogOpen(false)
   }
@@ -161,6 +169,9 @@ export function CatalogPage() {
       data.pricingMode,
       data.description,
       data.mediaDrafts ?? [],
+      data.isAvailable,
+      data.hasUnlimitedStock,
+      data.stock,
     )
 
     setEditingProductId(null)
@@ -208,6 +219,8 @@ export function CatalogPage() {
                           <th className="p-2 text-left">Product</th>
                           <th className="p-2 text-left">Description</th>
                           <th className="hidden p-2 text-left md:table-cell">Category</th>
+                          <th className="p-2 text-right">Stock</th>
+                          <th className="p-2 text-right">Available</th>
                           <th className="p-2 text-right">Price</th>
                           <th className="w-40 p-2 text-right">Actions</th>
                         </tr>
@@ -241,20 +254,34 @@ export function CatalogPage() {
                                   )}
                                   <div className="min-w-0">
                                     <p className="text-sm font-semibold text-zinc-800">{product.name}</p>
-                                    
+
                                     <p className="mt-1 text-xs text-zinc-500">{billingLabel}</p>
-                                    
+
                                   </div>
                                 </div>
                               </td>
-                                
-                                <td className="hidden p-2 align-middle md:table-cell">
-                                  {product.description && (
-                                      <p className="mt-1 truncate text-xs text-zinc-500">{product.description}</p>
-                                    )}
-                                </td>
+
+                              <td className="hidden p-2 align-middle md:table-cell">
+                                {product.description && (
+                                  <p className="mt-1 truncate text-xs text-zinc-500">{product.description}</p>
+                                )}
+                              </td>
                               <td className="hidden p-2 align-middle md:table-cell">
                                 <p className="text-sm text-zinc-600">{categoryLabel}</p>
+                              </td>
+
+                              <td className="p-2 text-right align-middle text-sm text-zinc-600">
+                                {product.hasUnlimitedStock ? '∞' : product.stock}
+                              </td>
+
+                              <td className="p-2 text-right align-middle">
+                                <div className="flex justify-end">
+                                  <Toggle
+                                    id={`toggle-avail-${product.id}`}
+                                    checked={product.isAvailable}
+                                    onChange={(e) => void updateProductAvailability(product.id, e.target.checked)}
+                                  />
+                                </div>
                               </td>
 
                               <td className="p-2 text-right align-middle text-sm font-semibold text-zinc-800">

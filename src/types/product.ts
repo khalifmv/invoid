@@ -1,5 +1,5 @@
 import type { EntityId, Timestamp } from './common'
-import type { PricingMode, UnitCode } from './invoice'
+import type { PricingMode, UnitCode } from './transaction'
 
 export interface Product {
   id: EntityId
@@ -10,6 +10,9 @@ export interface Product {
   defaultUnitCode?: UnitCode
   defaultCustomUnitLabel?: string
   defaultPricingMode?: PricingMode
+  isAvailable: boolean
+  hasUnlimitedStock: boolean
+  stock: number
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -22,4 +25,7 @@ export interface ProductDraft {
   defaultUnitCode?: UnitCode
   defaultCustomUnitLabel?: string
   defaultPricingMode?: PricingMode
+  isAvailable?: boolean
+  hasUnlimitedStock?: boolean
+  stock?: number
 }

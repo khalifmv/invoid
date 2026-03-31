@@ -9,7 +9,7 @@ import { Input } from '../components/ui/Input'
 import { NumberInput } from '../components/ui/NumberInput'
 import { Toggle } from '../components/ui/Toggle'
 import type { CurrencyCode } from '../types'
-import { useInvoiceStore } from '../store/invoiceStore'
+import { useTransactionStore } from '../store/transactionStore'
 import { useSettingsStore } from '../store/settingsStore'
 
 export function SettingsPage() {
@@ -27,7 +27,7 @@ export function SettingsPage() {
     resetSettings,
   } = useSettingsStore()
 
-  const clearInvoice = useInvoiceStore((state) => state.clearInvoice)
+  const clearTransaction = useTransactionStore((state) => state.clearTransaction)
   const logoInputRef = useRef<HTMLInputElement | null>(null)
   const currencyOptions = useMemo<DropdownOption[]>(
     () => [
@@ -55,7 +55,7 @@ export function SettingsPage() {
 
   const handleReset = () => {
     resetSettings()
-    clearInvoice()
+    clearTransaction()
   }
 
   return (

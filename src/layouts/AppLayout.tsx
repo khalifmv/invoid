@@ -30,7 +30,7 @@ export function AppLayout() {
             dangerouslySetInnerHTML={{ __html: invoidLogo }}
           />
           <span className="text-sm text-zinc-500">
-            {businessName.trim().length > 0 ? businessName : 'Offline invoice generator'}
+            {businessName.trim().length > 0 ? businessName : 'Offline transaction generator'}
           </span>
         </header>
 
