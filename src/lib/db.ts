@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { Category, Customer, Invoice, Product } from '../types'
+import type { Category, Customer, Invoice, Product, ProductMedia } from '../types'
 import {
   DEFAULT_PRICING_MODE,
   DEFAULT_UNIT_CODE,
@@ -12,6 +12,7 @@ import {
 export class InvoidDatabase extends Dexie {
   categories!: Table<Category, string>
   products!: Table<Product, string>
+  productMedia!: Table<ProductMedia, string>
   invoices!: Table<Invoice, string>
   customers!: Table<Customer, string>
 
@@ -72,6 +73,23 @@ export class InvoidDatabase extends Dexie {
             if (!invoice.status) {
               invoice.status = 'paid'
             }
+          })
+      })
+
+    this.version(5)
+      .stores({
+        categories: 'id, name, createdAt, updatedAt',
+        products: 'id, name, categoryId, defaultPrice, createdAt, updatedAt',
+        productMedia: 'id, productId, sortOrder, isCover, createdAt, updatedAt',
+        invoices: 'id, createdAt, updatedAt, status',
+        customers: 'id, name, createdAt, updatedAt',
+      })
+      .upgrade(async (transaction) => {
+        await transaction
+          .table('products')
+          .toCollection()
+          .modify((product: Product) => {
+            product.description = product.description?.trim() ?? ''
           })
       })
   }

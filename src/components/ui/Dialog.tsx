@@ -9,9 +9,10 @@ interface DialogProps {
   title: string
   children: ReactNode
   footer?: ReactNode
+  panelClassName?: string
 }
 
-export function Dialog({ open, onClose, title, children, footer }: DialogProps) {
+export function Dialog({ open, onClose, title, children, footer, panelClassName }: DialogProps) {
   useEffect(() => {
     if (!open) {
       return
@@ -48,7 +49,7 @@ export function Dialog({ open, onClose, title, children, footer }: DialogProps) 
       role="presentation"
     >
       <div
-        className="dialog-panel-enter w-full rounded-2xl border border-stone-200 bg-white p-4 shadow-xl md:max-w-md"
+        className={`dialog-panel-enter w-full rounded-2xl border border-stone-200 bg-white p-4 shadow-xl ${panelClassName ?? 'md:max-w-md'}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

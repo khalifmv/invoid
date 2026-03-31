@@ -4,6 +4,7 @@ import type { PricingMode, UnitCode } from './invoice'
 export interface Product {
   id: EntityId
   name: string
+  description?: string
   categoryId: EntityId | null
   defaultPrice: number
   defaultUnitCode?: UnitCode
@@ -15,6 +16,7 @@ export interface Product {
 
 export interface ProductDraft {
   name: string
+  description?: string
   categoryId: EntityId | null
   defaultPrice: number
   defaultUnitCode?: UnitCode
